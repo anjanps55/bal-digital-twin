@@ -1847,7 +1847,7 @@ Plasma Separator \u2192 Pump Control \u2192 Bioreactor \u2192 Sampler \u2192 Mix
 | Hepatocyte Count | 5 \u00d7 10\u2078 cells |
 | Plasma Flow | 30 mL/min (simulation) |
 
-**Team:** Bioartificial Liver Support Group \u2022 **Advisor:** Dr. James Kastner \u2022 **Mentor:** Dr. Anjan Panneer Selvam
+**Team:** Namit Gandavadi, Sabrina Yurconic, Anna Bourne, Ivy Lin, Grace Treon \u2022 **Advisor/Client:** Dr. James Kastner \u2022 **Mentor:** Dr. Anjan Panneer Selvam
         """)
 
 
