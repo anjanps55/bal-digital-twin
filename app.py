@@ -367,6 +367,93 @@ def _bioreactor_dialog():
 
 
 # ---------------------------------------------------------------------------
+# Preset info dialog
+# ---------------------------------------------------------------------------
+@st.dialog("Patient Preset Definitions", width="large")
+def _preset_info_dialog():
+    st.markdown(
+        f"<p style='color:{GRAY};margin-top:-8px'>"
+        "Each preset represents a different clinical scenario for acute hepatic failure. "
+        "Normal reference ranges: NH\u2083 < 35 \u00b5mol/L, Lidocaine < 10 \u00b5mol/L, "
+        "Hematocrit 0.36\u20130.44.</p>",
+        unsafe_allow_html=True,
+    )
+
+    presets_info = {
+        "Standard Adult": {
+            "desc": "A 45-year-old adult (70 kg) with **moderate liver failure**. "
+                    "Ammonia is 2.5\u00d7 normal, indicating significant but not "
+                    "life-threatening hepatic dysfunction. This is the most common "
+                    "presentation for patients who might benefit from BAL support "
+                    "while awaiting transplant.",
+            "severity": "SEVERE",
+            "sev_color": AMBER,
+        },
+        "Severe Case": {
+            "desc": "A 55-year-old adult (85 kg) with **fulminant hepatic failure**. "
+                    "Ammonia is 5.7\u00d7 normal\u2014at this level the patient is at "
+                    "risk of cerebral edema and coma. Requires aggressive treatment "
+                    "with extended duration and fresh hepatocyte cartridge. Lidocaine "
+                    "is also highly elevated, indicating near-total loss of CYP450 "
+                    "metabolic capacity.",
+            "severity": "CRITICAL",
+            "sev_color": RED,
+        },
+        "Pediatric Patient": {
+            "desc": "A 10-year-old child (35 kg) with **acute liver failure**. "
+                    "Blood flow is scaled down to 75 mL/min (half of adult) to match "
+                    "the smaller blood volume (~2.5 L vs 5 L). Plasma flow target is "
+                    "also reduced to 20 mL/min. Pediatric patients are more sensitive "
+                    "to ammonia neurotoxicity, making timely clearance especially critical.",
+            "severity": "SEVERE",
+            "sev_color": AMBER,
+        },
+        "Mild Case": {
+            "desc": "A 38-year-old adult (65 kg) with **early-stage liver failure**. "
+                    "Ammonia is only mildly elevated (1.7\u00d7 normal). This patient "
+                    "may recover with supportive care alone, but BAL treatment can "
+                    "accelerate toxin clearance and reduce the risk of progression. "
+                    "Shorter treatment duration (45 min) is sufficient.",
+            "severity": "MILD",
+            "sev_color": GREEN,
+        },
+        "Custom": {
+            "desc": "Start from Standard Adult defaults and modify any parameter "
+                    "through the Patient Condition and Bioreactor Config panels. "
+                    "Use this to explore edge cases or match specific clinical data.",
+            "severity": "VARIES",
+            "sev_color": GRAY,
+        },
+    }
+
+    for name, vals in PRESETS.items():
+        info = presets_info[name]
+        sev_c = info["sev_color"]
+        st.markdown(
+            f"<div style='background:#1e293b;border-radius:10px;padding:14px 18px;"
+            f"margin-bottom:10px;border-left:4px solid {sev_c}'>"
+            f"<div style='display:flex;justify-content:space-between;align-items:center'>"
+            f"<span style='font-weight:700;font-size:14px;color:#e2e8f0'>{name}</span>"
+            f"<span style='font-size:11px;font-weight:600;color:{sev_c};"
+            f"background:{sev_c}18;padding:2px 8px;border-radius:8px;"
+            f"border:1px solid {sev_c}40'>{info['severity']}</span>"
+            f"</div>"
+            f"<div style='font-size:12px;color:#94a3b8;margin-top:8px;line-height:1.5'>"
+            f"{info['desc']}</div>"
+            f"<div style='display:flex;gap:16px;margin-top:8px;font-size:11px;color:#64748b'>"
+            f"<span>NH\u2083 <b style=\"color:#e2e8f0\">{vals['NH3']:.0f}</b></span>"
+            f"<span>Lido <b style=\"color:#e2e8f0\">{vals['lido']:.0f}</b></span>"
+            f"<span>Urea <b style=\"color:#e2e8f0\">{vals['urea']:.1f}</b></span>"
+            f"<span>Q <b style=\"color:#e2e8f0\">{vals['Q_blood']:.0f}</b></span>"
+            f"<span>Hct <b style=\"color:#e2e8f0\">{vals['Hct']:.2f}</b></span>"
+            f"<span>Flow <b style=\"color:#e2e8f0\">{vals['Q_target']:.0f}</b></span>"
+            f"<span>Dur <b style=\"color:#e2e8f0\">{vals['duration']}</b> min</span>"
+            f"</div></div>",
+            unsafe_allow_html=True,
+        )
+
+
+# ---------------------------------------------------------------------------
 # Sidebar
 # ---------------------------------------------------------------------------
 def render_sidebar():
@@ -381,17 +468,21 @@ def render_sidebar():
         # ---- Preset selector ----
         def _on_preset():
             p = PRESETS[st.session_state._preset]
-            # push patient-level values
             for k in ("NH3", "lido", "urea", "Q_blood", "Hct"):
                 if k in p:
                     st.session_state[f"_pt_{k}"] = p[k]
-            # push treatment-level values
             for k in ("Q_target", "duration"):
                 if k in p:
                     st.session_state[f"_s_{k}"] = p[k]
 
-        st.selectbox("Patient Preset", list(PRESETS.keys()),
-                      key="_preset", on_change=_on_preset)
+        pc1, pc2 = st.columns([5, 1])
+        with pc1:
+            st.selectbox("Patient Preset", list(PRESETS.keys()),
+                          key="_preset", on_change=_on_preset)
+        with pc2:
+            st.markdown("<div style='height:25px'></div>", unsafe_allow_html=True)
+            if st.button("\u2139\ufe0f", key="_open_preset_info", help="View preset definitions"):
+                _preset_info_dialog()
 
         st.markdown("---")
 
@@ -1063,6 +1154,148 @@ def render_summary(r):
 
 
 # ---------------------------------------------------------------------------
+# Scenario explainer
+# ---------------------------------------------------------------------------
+def render_explainer(r):
+    """Generate a plain-English explanation of what happened in this simulation."""
+    p = r["params"]
+    bio = r["final"]["bioreactor"]
+    mon = r["final"]["return_monitor"]
+    dur = r["duration"]
+    success = mon["treatment_success"]
+
+    nh3_in, nh3_out = p["NH3"], bio["C_NH3"]
+    lido_in, lido_out = p["lido"], bio["C_lido"]
+    viab = bio["cell_viability"] * 100
+    nh3_cl = bio["NH3_clearance"] * 100
+    lido_cl = bio["lido_clearance"] * 100
+
+    # Classify severity for narrative
+    if nh3_in >= 150:
+        severity_word = "critically elevated"
+    elif nh3_in >= 80:
+        severity_word = "severely elevated"
+    elif nh3_in >= 35:
+        severity_word = "moderately elevated"
+    else:
+        severity_word = "mildly elevated"
+
+    # Build the narrative
+    lines = []
+
+    lines.append(f"### What happened in this simulation")
+    lines.append("")
+    lines.append(
+        f"A patient presented with **{severity_word} ammonia** ({nh3_in:.0f} \u00b5mol/L, "
+        f"normal < 35) and **lidocaine at {lido_in:.0f} \u00b5mol/L** (normal < 10), "
+        f"indicating acute hepatic failure where the liver can no longer adequately "
+        f"clear toxins from the blood."
+    )
+
+    lines.append("")
+    lines.append("#### The treatment process")
+    lines.append(
+        f"The patient's blood was circulated through the BAL device at "
+        f"{p['Q_blood']:.0f} mL/min for **{dur} minutes**. The plasma separator "
+        f"first split the blood into plasma and cellular components (RBCs, WBCs, "
+        f"platelets). Only the plasma\u2014carrying the dissolved toxins\u2014was "
+        f"pumped through the hollow-fiber bioreactor at {p['Q_target']:.0f} mL/min. "
+        f"The cellular components bypassed the bioreactor and were recombined with "
+        f"the treated plasma in the mixer before returning to the patient."
+    )
+
+    lines.append("")
+    lines.append("#### Inside the bioreactor")
+    lines.append(
+        f"The bioreactor contains two compartments separated by a polysulfone "
+        f"membrane ({p['A_m']:,.0f} cm\u00b2 surface area):\n\n"
+        f"- **CV1 (Plasma side, {p['V_CV1']:.0f} mL):** Toxic plasma flows through "
+        f"this compartment. Ammonia and lidocaine diffuse across the membrane into CV2 "
+        f"driven by the concentration gradient.\n"
+        f"- **CV2 (Hepatocyte side, {p['V_CV2']:.0f} mL):** Contains ~5\u00d710\u2078 "
+        f"viable hepatocytes (liver cells) that metabolize the toxins. Ammonia is "
+        f"converted to urea via the **urea cycle** (2 NH\u2083 \u2192 1 Urea), and "
+        f"lidocaine is converted to MEGX by **CYP450 enzymes** (1 Lido \u2192 1 MEGX). "
+        f"The products diffuse back across the membrane.\n\n"
+        f"This is modeled by **8 coupled ordinary differential equations** (forward "
+        f"Euler integration, 1-minute time steps) tracking concentrations of NH\u2083, "
+        f"urea, lidocaine, and MEGX in both compartments simultaneously."
+    )
+
+    lines.append("")
+    lines.append("#### Results")
+
+    if success:
+        lines.append(
+            f"After {dur} minutes of treatment, ammonia dropped from "
+            f"**{nh3_in:.0f} \u2192 {nh3_out:.1f} \u00b5mol/L** "
+            f"({nh3_cl:.1f}% clearance) and lidocaine from "
+            f"**{lido_in:.0f} \u2192 {lido_out:.1f} \u00b5mol/L** "
+            f"({lido_cl:.1f}% clearance). Both are now below clinical safety "
+            f"thresholds (NH\u2083 < 50, Lido < 12). The hepatocytes maintained "
+            f"**{viab:.1f}% viability** throughout treatment, indicating the cell "
+            f"cartridge is still functional for potential re-use. "
+            f"The return monitor confirmed zero safety violations and **approved "
+            f"the treated blood for return to the patient**."
+        )
+    else:
+        issues = []
+        if nh3_out >= 50:
+            issues.append(f"ammonia remains at {nh3_out:.1f} \u00b5mol/L (target < 50)")
+        if lido_out >= 12:
+            issues.append(f"lidocaine remains at {lido_out:.1f} \u00b5mol/L (target < 12)")
+        if mon["violation_count"] > 0:
+            issues.append(f"{mon['violation_count']} safety violation(s) detected")
+        issue_text = " and ".join(issues) if issues else "thresholds not met"
+        lines.append(
+            f"After {dur} minutes, ammonia dropped from "
+            f"**{nh3_in:.0f} \u2192 {nh3_out:.1f} \u00b5mol/L** "
+            f"({nh3_cl:.1f}% clearance) and lidocaine from "
+            f"**{lido_in:.0f} \u2192 {lido_out:.1f} \u00b5mol/L** "
+            f"({lido_cl:.1f}% clearance). However, treatment is **incomplete** "
+            f"because {issue_text}. "
+            f"The hepatocytes maintained {viab:.1f}% viability. "
+            f"**Recommended next steps:** extend treatment duration, increase "
+            f"plasma flow rate, or install a fresh hepatocyte cartridge to boost "
+            f"metabolic capacity."
+        )
+
+    # Adaptive controller note
+    if r["severity"]:
+        adj = r["adjustments"]
+        lines.append("")
+        lines.append("#### Adaptive controller")
+        lines.append(
+            f"The adaptive controller classified this patient as "
+            f"**{r['severity'].upper()}** severity and automatically adjusted: "
+            f"flow rate to {adj['Q_plasma']} mL/min"
+            + (f", installed a fresh hepatocyte cartridge "
+               f"({adj['k1_multiplier']:.1f}\u00d7 metabolic boost)"
+               if adj.get("fresh_cartridge") else "")
+            + (f", applied a +{adj['temperature_boost']}\u00b0C temperature boost"
+               if adj.get("temperature_boost", 0) > 0 else "")
+            + f", and extended treatment to {dur} minutes."
+        )
+
+    lines.append("")
+    lines.append("#### Key engineering takeaway")
+    lines.append(
+        f"The two-compartment mass balance model shows that toxin clearance is "
+        f"governed by three factors: **(1)** membrane transport rate "
+        f"(P_m \u00d7 A_m \u00d7 \u0394C), **(2)** hepatocyte metabolic rate "
+        f"(k\u2081 \u00d7 viability \u00d7 C_CV2), and **(3)** plasma residence "
+        f"time (V/Q). The system reaches steady state when the rate of toxin "
+        f"entering CV1 equals the rate being metabolized in CV2\u2014which is why "
+        f"simply extending treatment duration beyond ~20 minutes yields diminishing "
+        f"returns. To further reduce outlet concentrations, you need to increase "
+        f"membrane area, boost hepatocyte activity (fresh cartridge), or reduce inlet "
+        f"flow to increase residence time."
+    )
+
+    st.markdown("\n".join(lines))
+
+
+# ---------------------------------------------------------------------------
 # Downloads
 # ---------------------------------------------------------------------------
 def render_downloads(r):
@@ -1170,6 +1403,8 @@ def main():
         render_schematic(r)
         st.markdown("---")
         render_plots(r)
+        st.markdown("---")
+        render_explainer(r)
         st.markdown("---")
         render_module_status(r)
         st.markdown("---")
