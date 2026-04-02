@@ -1826,11 +1826,15 @@ def render_downloads(r):
 # ---------------------------------------------------------------------------
 # About
 # ---------------------------------------------------------------------------
-def render_about():
-    with st.expander("About the BAL Digital Twin"):
-        st.markdown(f"""
-**Bioartificial Liver (BAL) Support Device** — Senior Capstone Project, UGA
+@st.dialog("About the BAL Digital Twin", width="large")
+def _about_dialog():
+    st.markdown(
+        f"<p style='color:{GRAY};margin-top:-8px'>"
+        "Senior Capstone Project — University of Georgia, College of Engineering</p>",
+        unsafe_allow_html=True,
+    )
 
+    st.markdown("""
 Acute hepatic failure has limited treatment options beyond liver transplantation,
 which is constrained by donor shortages and time pressure (50-80% mortality).
 This digital twin simulates an extracorporeal BAL device that processes patient
@@ -1838,17 +1842,42 @@ blood through a flat-disc membrane bioreactor containing viable hepatocytes.
 
 **System Pipeline:**
 Plasma Separator \u2192 Pump Control \u2192 Bioreactor \u2192 Sampler \u2192 Mixer \u2192 Return Monitor
+    """)
 
-**Key Design Parameters:**
-| Parameter | Value |
-|---|---|
-| Membrane Area | 10,000 cm\u00b2 (polysulfone) |
-| Compartment Volumes | 100 mL each (CV1 + CV2) |
-| Hepatocyte Count | 5 \u00d7 10\u2078 cells |
-| Plasma Flow | 30 mL/min (simulation) |
+    st.markdown("---")
 
-**Team:** Namit Gandavadi, Sabrina Yurconic, Anna Bourne, Ivy Lin, Grace Treon \u2022 **Advisor/Client:** Dr. James Kastner \u2022 **Mentor:** Dr. Anjan Panneer Selvam
-        """)
+    tc1, tc2 = st.columns(2)
+    with tc1:
+        st.markdown("**Team**")
+        st.markdown(
+            "- Namit Gandavadi\n"
+            "- Sabrina Yurconic\n"
+            "- Anna Bourne\n"
+            "- Ivy Lin\n"
+            "- Grace Treon"
+        )
+    with tc2:
+        st.markdown("**Advisors**")
+        st.markdown(
+            "- **Advisor/Client:** Dr. James Kastner\n"
+            "- **Mentor:** Dr. Anjan Panneer Selvam"
+        )
+        st.markdown("")
+        st.markdown("**Institution**")
+        st.markdown("University of Georgia, College of Engineering")
+
+    st.markdown("---")
+    st.markdown("**Key Design Parameters**")
+    st.markdown(
+        "| Parameter | Per Unit | System (4 units) |\n"
+        "|---|---|---|\n"
+        "| Cartridge | 35\u00d720 cm cylinder | 4 cartridges |\n"
+        "| Membrane | 314 cm\u00b2 flat disc | 1,256 cm\u00b2 total |\n"
+        "| Volume | 7.15 L (3.57 L/compartment) | 28.6 L total |\n"
+        "| Hepatocytes | 3.6\u00d710\u2079 cells | 1.44\u00d710\u00b9\u2070 total |\n"
+        "| Plasma Flow | 75 mL/min | 150 mL/min (2\u00d72 config) |\n"
+        "| Configuration | \u2014 | 2\u00d7 parallel \u00d7 2 stages in series |"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1877,18 +1906,24 @@ def render_welcome():
 def main():
     inject_css()
 
-    # Header
-    st.markdown(
-        f"""
-        <div style="text-align:center;padding:0.8rem 0 0.2rem;">
-            <h1 style="color:{NAVY};margin:0;font-size:2rem;">Bioartificial Liver Digital Twin</h1>
-            <p style="color:{GRAY};margin:4px 0 0;font-size:1.05rem;">
-                Treatment Simulation & Monitoring Dashboard
-            </p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    # Header with about icon
+    hdr1, hdr2 = st.columns([20, 1])
+    with hdr1:
+        st.markdown(
+            f"""
+            <div style="text-align:center;padding:0.8rem 0 0.2rem;">
+                <h1 style="color:{NAVY};margin:0;font-size:2rem;">Bioartificial Liver Digital Twin</h1>
+                <p style="color:{GRAY};margin:4px 0 0;font-size:1.05rem;">
+                    Treatment Simulation & Monitoring Dashboard
+                </p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with hdr2:
+        st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
+        if st.button("\u2139\ufe0f", key="_open_about", help="About & Team"):
+            _about_dialog()
 
     params, adaptive, run_clicked = render_sidebar()
 
@@ -1917,7 +1952,6 @@ def main():
     else:
         render_welcome()
 
-    render_about()
 
 
 if __name__ == "__main__":
