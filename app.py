@@ -1040,7 +1040,9 @@ def render_plots(r):
     with tab6:
         fg = _FINAL_DOC_GEOMETRY
         cur_p = r["params"]
-        n_units = 4  # 4 units in parallel for 150 mL/min patient flow
+        n_units = 4        # 4 total units
+        n_parallel = 2     # 2 units per stage
+        n_stages = 2       # 2 stages in series
 
         st.markdown(
             f"Comparing the **current simulation geometry** against the "
@@ -1052,42 +1054,49 @@ def render_plots(r):
             f"system throughput is {n_units}\u00d7."
         )
 
-        # System architecture diagram
-        unit_labels = [chr(65 + i) for i in range(n_units)]  # A, B, C, D...
-        unit_boxes = "&emsp;".join(
-            f"<span style='background:#1e3a5f;padding:4px 12px;border-radius:6px;"
-            f"color:#e2e8f0;font-weight:600'>Unit {lbl}</span>"
-            for lbl in unit_labels
-        )
-        unit_specs = "&emsp;".join(
-            f"<span style='font-size:10px;color:#64748b'>"
-            f"35\u00d720 cm &bull; 7.15 L &bull; 314 cm\u00b2</span>"
-            for _ in unit_labels
-        )
-        fan_out = "&emsp;&emsp;".join(
-            f"<span style='font-size:18px'>\u2199</span>" if i < n_units // 2
-            else f"<span style='font-size:18px'>\u2198</span>"
-            for i in range(n_units)
-        )
-        fan_in = "&emsp;&emsp;".join(
-            f"<span style='font-size:18px'>\u2198</span>" if i < n_units // 2
-            else f"<span style='font-size:18px'>\u2199</span>"
-            for i in range(n_units)
-        )
+        # System architecture diagram — 2 stages × 2 parallel
         st.markdown(
-            f"<div style='background:#1e293b;border-radius:10px;padding:14px 20px;"
+            f"<div style='background:#1e293b;border-radius:10px;padding:16px 20px;"
             f"margin:6px 0 10px;text-align:center;font-size:13px;color:#94a3b8;"
-            f"line-height:1.8'>"
-            f"<span style='color:#e2e8f0;font-weight:600'>System Architecture:</span><br>"
+            f"line-height:2'>"
+            f"<span style='color:#e2e8f0;font-weight:600'>System Architecture "
+            f"({n_units} units: {n_parallel}\u00d7 parallel \u00d7 {n_stages} stages in series)</span><br>"
             f"Patient Blood (150 mL/min) \u2192 <b>Separator</b> \u2192 "
-            f"Plasma ({n_units}\u00d7{fg['Q_target']:.1f} = {n_units*fg['Q_target']:.0f} mL/min)<br>"
-            f"{fan_out}<br>"
-            f"{unit_boxes}<br>"
-            f"{unit_specs}<br>"
+            f"Plasma ({n_parallel}\u00d7{fg['Q_target']:.0f} = 150 mL/min)<br>"
+            # Stage 1
+            f"<span style='font-size:18px'>\u2199</span>"
+            f"&emsp;&emsp;&emsp;&emsp;&emsp;"
+            f"<span style='font-size:18px'>\u2198</span><br>"
+            f"<span style='background:#1e3a5f;padding:4px 12px;border-radius:6px;"
+            f"color:#e2e8f0;font-weight:600'>Unit A</span>"
+            f"&emsp;&emsp;"
+            f"<span style='background:#1e3a5f;padding:4px 12px;border-radius:6px;"
+            f"color:#e2e8f0;font-weight:600'>Unit B</span>"
+            f"&emsp;&emsp;"
+            f"<span style='font-size:10px;color:#475569'>\u2190 Stage 1 ({fg['Q_target']:.0f} mL/min each)</span><br>"
+            f"<span style='font-size:18px'>\u2198</span>"
+            f"&emsp;&emsp;&emsp;&emsp;&emsp;"
+            f"<span style='font-size:18px'>\u2199</span><br>"
+            # Merge + re-split
+            f"<span style='color:#64748b;font-size:11px'>Merge (150 mL/min) \u2192 Re-split</span><br>"
+            # Stage 2
+            f"<span style='font-size:18px'>\u2199</span>"
+            f"&emsp;&emsp;&emsp;&emsp;&emsp;"
+            f"<span style='font-size:18px'>\u2198</span><br>"
+            f"<span style='background:#1e3a5f;padding:4px 12px;border-radius:6px;"
+            f"color:#e2e8f0;font-weight:600'>Unit C</span>"
+            f"&emsp;&emsp;"
+            f"<span style='background:#1e3a5f;padding:4px 12px;border-radius:6px;"
+            f"color:#e2e8f0;font-weight:600'>Unit D</span>"
+            f"&emsp;&emsp;"
+            f"<span style='font-size:10px;color:#475569'>\u2190 Stage 2 ({fg['Q_target']:.0f} mL/min each)</span><br>"
+            f"<span style='font-size:18px'>\u2198</span>"
+            f"&emsp;&emsp;&emsp;&emsp;&emsp;"
+            f"<span style='font-size:18px'>\u2199</span><br>"
+            f"<b>Mixer</b> \u2192 Patient Return (150 mL/min)<br>"
             f"<span style='font-size:9px;color:#475569'>"
-            f"3.6\u00d710\u2079 cells/unit &bull; {fg['Q_target']:.1f} mL/min each</span><br>"
-            f"{fan_in}<br>"
-            f"<b>Mixer</b> \u2192 Patient Return (150 mL/min)"
+            f"Each unit: 35\u00d720 cm &bull; 7.15 L &bull; 314 cm\u00b2 &bull; "
+            f"3.6\u00d710\u2079 cells &bull; {fg['V_CV1']/fg['Q_target']:.1f} min residence time</span>"
             f"</div>",
             unsafe_allow_html=True,
         )
@@ -1104,13 +1113,13 @@ def render_plots(r):
                 f"| Membrane Type | Hollow Fiber | Flat Disc | \u2014 |\n"
                 f"| P_m NH\u2083 | {cur_p['P_m_NH3']} cm/min | {fg['P_m_NH3']} cm/min | \u2014 |\n"
                 f"| P_m Lido | {cur_p['P_m_lido']} cm/min | {fg['P_m_lido']} cm/min | \u2014 |\n"
-                f"| Flow Rate | {cur_p['Q_target']:.0f} mL/min | {fg['Q_target']:.0f} mL/min | {n_units*fg['Q_target']:.0f} mL/min |\n"
-                f"| Residence Time | {cur_p['V_CV1']/max(cur_p['Q_target'],1):.1f} min | {fg['V_CV1']/fg['Q_target']:.1f} min | \u2014 |\n"
+                f"| Flow/Unit | {cur_p['Q_target']:.0f} mL/min | {fg['Q_target']:.0f} mL/min | {n_parallel*fg['Q_target']:.0f} mL/min |\n"
+                f"| Residence Time | {cur_p['V_CV1']/max(cur_p['Q_target'],1):.1f} min | {fg['V_CV1']/fg['Q_target']:.1f} min | {n_stages*fg['V_CV1']/fg['Q_target']:.1f} min (2 passes) |\n"
                 f"| KoA (NH\u2083) | {cur_p['P_m_NH3']*cur_p['A_m']:.0f} cm\u00b3/min | {fg['P_m_NH3']*fg['A_m']:.1f} cm\u00b3/min | {n_units*fg['P_m_NH3']*fg['A_m']:.1f} cm\u00b3/min |\n"
                 f"| Hematocrit | {cur_p['Hct']:.2f} | {fg['Hct']:.2f} | \u2014 |\n"
-                f"| Cell Count | 5\u00d710\u2078 | 3.6\u00d710\u2079 | 7.2\u00d710\u2079 |\n"
-                f"| Cartridge | Abstract | 35\u00d720 cm cyl. | {n_units}\u00d7 parallel |\n"
-                f"| Units | 1 | 1 | {n_units} |"
+                f"| Cell Count | 5\u00d710\u2078 | 3.6\u00d710\u2079 | {n_units*3.6e9:.1e} |\n"
+                f"| Configuration | Single unit | 1 cartridge | {n_parallel}\u00d7 parallel \u00d7 {n_stages} stages |\n"
+                f"| Units | 1 | 1 | {n_units} total |"
             )
 
         # Run the final design simulation (one unit)
@@ -1220,52 +1229,53 @@ def render_plots(r):
                     title=f"Per-Unit Detail (35\u00d720 cm, 314 cm\u00b2 flat disc, {fg['Q_target']:.0f} mL/min)")
         _show_chart(fig2)
 
-        # Summary metrics comparison — 3 columns: current, per-unit, combined system
+        # Summary metrics — current vs stage 1 vs stage 2 (combined system)
         st.markdown(f"#### End-of-Treatment Comparison (t = {r['duration']} min)")
         c1, c2, c3 = st.columns(3)
         bio_cur = r["final"]["bioreactor"]
         fd_last = df_fd.iloc[-1]
         fd_nh3_cl = fd_last.get("bio_NH3_clearance", 0) * 100
         fd_lido_cl = fd_last.get("bio_lido_clearance", 0) * 100
+        # Stage 1 outlet (from s1_ prefixed columns)
+        s1_nh3 = fd_last.get("s1_bio_C_NH3", p["NH3"])
+        s1_lido = fd_last.get("s1_bio_C_lido", p["lido"])
+        s1_nh3_cl = (p["NH3"] - s1_nh3) / p["NH3"] * 100 if p["NH3"] > 0 else 0
 
         with c1:
             st.markdown(
                 f"**Current Geometry**\n\n"
                 f"| Metric | Value |\n|---|---|\n"
-                f"| Units | 1 |\n"
+                f"| Config | 1 unit |\n"
                 f"| NH\u2083 outlet | {bio_cur['C_NH3']:.1f} \u00b5mol/L |\n"
                 f"| Lido outlet | {bio_cur['C_lido']:.1f} \u00b5mol/L |\n"
                 f"| NH\u2083 clearance | {bio_cur['NH3_clearance']*100:.1f}% |\n"
                 f"| Lido clearance | {bio_cur['lido_clearance']*100:.1f}% |\n"
                 f"| Cell viability | {bio_cur['cell_viability']*100:.1f}% |\n"
-                f"| Res. time | {cur_p['V_CV1']/max(cur_p['Q_target'],1):.1f} min |\n"
                 f"| KoA NH\u2083 | {cur_p['P_m_NH3']*cur_p['A_m']:.0f} cm\u00b3/min |"
             )
         with c2:
             st.markdown(
-                f"**Final Design (per unit)**\n\n"
+                f"**Final Design \u2014 After Stage 1**\n\n"
                 f"| Metric | Value |\n|---|---|\n"
-                f"| Units | 1 of {n_units} |\n"
+                f"| Config | {n_parallel}\u00d7 parallel |\n"
+                f"| NH\u2083 outlet | {s1_nh3:.1f} \u00b5mol/L |\n"
+                f"| Lido outlet | {s1_lido:.1f} \u00b5mol/L |\n"
+                f"| NH\u2083 clearance | {s1_nh3_cl:.1f}% |\n"
+                f"| Res. time | {fg['V_CV1']/fg['Q_target']:.1f} min |\n"
+                f"| Flow/unit | {fg['Q_target']:.0f} mL/min |\n"
+                f"| KoA/unit | {fg['P_m_NH3']*fg['A_m']:.1f} cm\u00b3/min |"
+            )
+        with c3:
+            st.markdown(
+                f"**Final Design \u2014 After Stage 2 (patient-facing)**\n\n"
+                f"| Metric | Value |\n|---|---|\n"
+                f"| Config | {n_parallel}\u00d7\u00d7{n_stages} stages |\n"
                 f"| NH\u2083 outlet | {fd_last['bio_C_NH3']:.1f} \u00b5mol/L |\n"
                 f"| Lido outlet | {fd_last['bio_C_lido']:.1f} \u00b5mol/L |\n"
                 f"| NH\u2083 clearance | {fd_nh3_cl:.1f}% |\n"
                 f"| Lido clearance | {fd_lido_cl:.1f}% |\n"
-                f"| Cell viability | {fd_last['bio_cell_viability']*100:.1f}% |\n"
-                f"| Res. time | {fg['V_CV1']/fg['Q_target']:.1f} min |\n"
-                f"| KoA NH\u2083 | {fg['P_m_NH3']*fg['A_m']:.1f} cm\u00b3/min |"
-            )
-        with c3:
-            st.markdown(
-                f"**Final Design (system: {n_units} units)**\n\n"
-                f"| Metric | Value |\n|---|---|\n"
-                f"| Units | {n_units} parallel |\n"
-                f"| NH\u2083 outlet | {fd_last['bio_C_NH3']:.1f} \u00b5mol/L |\n"
-                f"| Lido outlet | {fd_last['bio_C_lido']:.1f} \u00b5mol/L |\n"
-                f"| NH\u2083 clearance | {fd_nh3_cl:.1f}% |\n"
-                f"| Total throughput | {n_units*fg['Q_target']:.0f} mL/min |\n"
                 f"| Total volume | {n_units*(fg['V_CV1']+fg['V_CV2'])/1000:.1f} L |\n"
-                f"| Total cells | {n_units*3.6e9:.1e} |\n"
-                f"| Total A_m | {n_units*fg['A_m']:.0f} cm\u00b2 |"
+                f"| Total cells | {n_units*3.6e9:.1e} |"
             )
 
         # Engineering insight callout
@@ -1304,15 +1314,42 @@ _FINAL_DOC_GEOMETRY = {
     "k1_NH3": 1.0,         # /min — same
     "k1_lido": 0.85,       # /min — same
     "k_decay": 0.0001,     # /min — same
-    "Q_target": 37.5,      # mL/min — per unit (150 mL/min ÷ 4 units)
+    "Q_target": 75.0,      # mL/min — per unit (150 ÷ 2 parallel per stage)
     "Hct": 0.40,           # fraction — updated
     "sep_eff": 0.98,        # separation efficiency
     "cell_count": 3.6e9,   # cells per unit
 }
 
 
+def _apply_final_design_constants(p, fg):
+    """Apply final design geometry to constants. Returns nothing."""
+    constants.SEPARATOR_INPUTS["C_NH3_in_nominal"] = p["NH3"]
+    constants.SEPARATOR_INPUTS["C_lido_in_nominal"] = p["lido"]
+    constants.SEPARATOR_INPUTS["C_urea_in_nominal"] = p["urea"]
+    constants.SEPARATOR_INPUTS["Q_blood_nominal"] = p["Q_blood"]
+    constants.SEPARATOR_INPUTS["Hct_in_nominal"] = fg["Hct"]
+    constants.BIOREACTOR_VOLUMES["V_CV1"] = fg["V_CV1"]
+    constants.BIOREACTOR_VOLUMES["V_CV2"] = fg["V_CV2"]
+    constants.MEMBRANE_TRANSPORT["A_m"] = fg["A_m"]
+    constants.MEMBRANE_TRANSPORT["P_m_NH3"] = fg["P_m_NH3"]
+    constants.MEMBRANE_TRANSPORT["P_m_urea"] = fg["P_m_urea"]
+    constants.MEMBRANE_TRANSPORT["P_m_lido"] = fg["P_m_lido"]
+    constants.MEMBRANE_TRANSPORT["P_m_MEGX"] = fg["P_m_MEGX"]
+    constants.MEMBRANE_TRANSPORT["P_m_GX"] = fg["P_m_GX"]
+    constants.HEPATOCYTE_KINETICS["k1_NH3_base"] = fg["k1_NH3"]
+    constants.HEPATOCYTE_KINETICS["k1_lido_base"] = fg["k1_lido"]
+    constants.BIOREACTOR_THRESHOLDS["k_cell_decay"] = fg["k_decay"]
+    constants.PUMP_THRESHOLDS["Q_target"] = fg["Q_target"]
+
+
 def _run_final_design_sim(r):
-    """Run simulation with final document geometry for comparison."""
+    """Run 2-stage series simulation (2×2 config: 2 parallel per stage, 2 stages).
+
+    Stage 1: Patient plasma → bioreactor unit at 75 mL/min
+    Stage 2: Stage 1 outlet → fresh bioreactor unit at 75 mL/min
+    Both stages run concurrently for the full treatment duration.
+    The combined output reflects two sequential passes.
+    """
     p = r["params"]
     fg = _FINAL_DOC_GEOMETRY
 
@@ -1324,40 +1361,50 @@ def _run_final_design_sim(r):
     orig_bio_thresh = copy.deepcopy(constants.BIOREACTOR_THRESHOLDS)
 
     try:
-        # Patient toxins stay the same
-        constants.SEPARATOR_INPUTS["C_NH3_in_nominal"] = p["NH3"]
-        constants.SEPARATOR_INPUTS["C_lido_in_nominal"] = p["lido"]
-        constants.SEPARATOR_INPUTS["C_urea_in_nominal"] = p["urea"]
-        constants.SEPARATOR_INPUTS["Q_blood_nominal"] = p["Q_blood"]
-        constants.SEPARATOR_INPUTS["Hct_in_nominal"] = fg["Hct"]
+        duration = int(r["duration"])
 
-        # Final design geometry
-        constants.BIOREACTOR_VOLUMES["V_CV1"] = fg["V_CV1"]
-        constants.BIOREACTOR_VOLUMES["V_CV2"] = fg["V_CV2"]
-        constants.MEMBRANE_TRANSPORT["A_m"] = fg["A_m"]
-        constants.MEMBRANE_TRANSPORT["P_m_NH3"] = fg["P_m_NH3"]
-        constants.MEMBRANE_TRANSPORT["P_m_urea"] = fg["P_m_urea"]
-        constants.MEMBRANE_TRANSPORT["P_m_lido"] = fg["P_m_lido"]
-        constants.MEMBRANE_TRANSPORT["P_m_MEGX"] = fg["P_m_MEGX"]
-        constants.MEMBRANE_TRANSPORT["P_m_GX"] = fg["P_m_GX"]
-        constants.HEPATOCYTE_KINETICS["k1_NH3_base"] = fg["k1_NH3"]
-        constants.HEPATOCYTE_KINETICS["k1_lido_base"] = fg["k1_lido"]
-        constants.BIOREACTOR_THRESHOLDS["k_cell_decay"] = fg["k_decay"]
-        constants.PUMP_THRESHOLDS["Q_target"] = fg["Q_target"]
+        # --- Stage 1: patient plasma at original concentrations ---
+        _apply_final_design_constants(p, fg)
+        sim1 = SimulationEngine(dt=1.0)
+        for _ in range(duration):
+            sim1.step()
 
-        sim = SimulationEngine(dt=1.0)
-        duration = r["duration"]
-        for _ in range(int(duration)):
-            sim.step()
+        # --- Stage 2: feed stage-1 outlet into a second bioreactor ---
+        # Get stage-1 final outlet concentrations (steady-state inlet for stage 2)
+        s1_final = sim1.history[-1]["bioreactor"]
+        _apply_final_design_constants(p, fg)
+        # Override inlet concentrations with stage 1 outlet
+        constants.SEPARATOR_INPUTS["C_NH3_in_nominal"] = s1_final["C_NH3"]
+        constants.SEPARATOR_INPUTS["C_lido_in_nominal"] = s1_final["C_lido"]
+        constants.SEPARATOR_INPUTS["C_urea_in_nominal"] = s1_final["C_urea"]
 
+        sim2 = SimulationEngine(dt=1.0)
+        for _ in range(duration):
+            sim2.step()
+
+        # Build combined dataframe — report stage 2 outputs (final patient-facing)
+        # but include stage 1 data for comparison
         records = []
-        for h in sim.history:
-            row = {"time": h["time"]}
-            for mod_key in ("bioreactor", "return_monitor"):
-                prefix = {"bioreactor": "bio", "return_monitor": "mon"}[mod_key]
-                for k, v in h[mod_key].items():
-                    if isinstance(v, (int, float, bool, np.integer, np.floating)):
-                        row[f"{prefix}_{k}"] = v
+        for i, h2 in enumerate(sim2.history):
+            h1 = sim1.history[i] if i < len(sim1.history) else sim1.history[-1]
+            row = {"time": h2["time"]}
+            # Stage 2 (final) bioreactor outputs
+            for k, v in h2["bioreactor"].items():
+                if isinstance(v, (int, float, bool, np.integer, np.floating)):
+                    row[f"bio_{k}"] = v
+            # Stage 1 bioreactor outputs for reference
+            for k, v in h1["bioreactor"].items():
+                if isinstance(v, (int, float, bool, np.integer, np.floating)):
+                    row[f"s1_bio_{k}"] = v
+            # Return monitor from stage 2
+            for k, v in h2["return_monitor"].items():
+                if isinstance(v, (int, float, bool, np.integer, np.floating)):
+                    row[f"mon_{k}"] = v
+            # Recalculate clearance relative to original patient inlet
+            if p["NH3"] > 0:
+                row["bio_NH3_clearance"] = (p["NH3"] - h2["bioreactor"]["C_NH3"]) / p["NH3"]
+            if p["lido"] > 0:
+                row["bio_lido_clearance"] = (p["lido"] - h2["bioreactor"]["C_lido"]) / p["lido"]
             records.append(row)
         return pd.DataFrame(records)
 
