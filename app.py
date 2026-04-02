@@ -1040,7 +1040,7 @@ def render_plots(r):
     with tab6:
         fg = _FINAL_DOC_GEOMETRY
         cur_p = r["params"]
-        n_units = 2  # Document specifies 2 units in parallel
+        n_units = 4  # 4 units in parallel for 150 mL/min patient flow
 
         st.markdown(
             f"Comparing the **current simulation geometry** against the "
@@ -1053,31 +1053,40 @@ def render_plots(r):
         )
 
         # System architecture diagram
+        unit_labels = [chr(65 + i) for i in range(n_units)]  # A, B, C, D...
+        unit_boxes = "&emsp;".join(
+            f"<span style='background:#1e3a5f;padding:4px 12px;border-radius:6px;"
+            f"color:#e2e8f0;font-weight:600'>Unit {lbl}</span>"
+            for lbl in unit_labels
+        )
+        unit_specs = "&emsp;".join(
+            f"<span style='font-size:10px;color:#64748b'>"
+            f"35\u00d720 cm &bull; 7.15 L &bull; 314 cm\u00b2</span>"
+            for _ in unit_labels
+        )
+        fan_out = "&emsp;&emsp;".join(
+            f"<span style='font-size:18px'>\u2199</span>" if i < n_units // 2
+            else f"<span style='font-size:18px'>\u2198</span>"
+            for i in range(n_units)
+        )
+        fan_in = "&emsp;&emsp;".join(
+            f"<span style='font-size:18px'>\u2198</span>" if i < n_units // 2
+            else f"<span style='font-size:18px'>\u2199</span>"
+            for i in range(n_units)
+        )
         st.markdown(
             f"<div style='background:#1e293b;border-radius:10px;padding:14px 20px;"
             f"margin:6px 0 10px;text-align:center;font-size:13px;color:#94a3b8;"
             f"line-height:1.8'>"
             f"<span style='color:#e2e8f0;font-weight:600'>System Architecture:</span><br>"
             f"Patient Blood (150 mL/min) \u2192 <b>Separator</b> \u2192 "
-            f"Plasma ({n_units}\u00d7{fg['Q_target']:.0f} = {n_units*fg['Q_target']:.0f} mL/min)<br>"
-            f"<span style='font-size:20px'>\u2199</span>"
-            f"&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;"
-            f"<span style='font-size:20px'>\u2198</span><br>"
-            f"<span style='background:#1e3a5f;padding:4px 12px;border-radius:6px;"
-            f"color:#e2e8f0;font-weight:600'>Unit A</span>"
-            f"&emsp;"
-            f"<span style='background:#1e3a5f;padding:4px 12px;border-radius:6px;"
-            f"color:#e2e8f0;font-weight:600'>Unit B</span><br>"
-            f"<span style='font-size:10px;color:#64748b'>"
-            f"35\u00d720 cm &bull; 7.15 L &bull; 314 cm\u00b2 &bull; "
-            f"3.6\u00d710\u2079 cells</span>"
-            f"&emsp;"
-            f"<span style='font-size:10px;color:#64748b'>"
-            f"35\u00d720 cm &bull; 7.15 L &bull; 314 cm\u00b2 &bull; "
-            f"3.6\u00d710\u2079 cells</span><br>"
-            f"<span style='font-size:20px'>\u2198</span>"
-            f"&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;"
-            f"<span style='font-size:20px'>\u2199</span><br>"
+            f"Plasma ({n_units}\u00d7{fg['Q_target']:.1f} = {n_units*fg['Q_target']:.0f} mL/min)<br>"
+            f"{fan_out}<br>"
+            f"{unit_boxes}<br>"
+            f"{unit_specs}<br>"
+            f"<span style='font-size:9px;color:#475569'>"
+            f"3.6\u00d710\u2079 cells/unit &bull; {fg['Q_target']:.1f} mL/min each</span><br>"
+            f"{fan_in}<br>"
             f"<b>Mixer</b> \u2192 Patient Return (150 mL/min)"
             f"</div>",
             unsafe_allow_html=True,
@@ -1295,7 +1304,7 @@ _FINAL_DOC_GEOMETRY = {
     "k1_NH3": 1.0,         # /min — same
     "k1_lido": 0.85,       # /min — same
     "k_decay": 0.0001,     # /min — same
-    "Q_target": 75.0,      # mL/min — per unit
+    "Q_target": 37.5,      # mL/min — per unit (150 mL/min ÷ 4 units)
     "Hct": 0.40,           # fraction — updated
     "sep_eff": 0.98,        # separation efficiency
     "cell_count": 3.6e9,   # cells per unit
