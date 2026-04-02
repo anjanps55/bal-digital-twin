@@ -1472,12 +1472,10 @@ def main():
         r = st.session_state.sim_result
         render_metrics(r)
         st.markdown("---")
-        st.markdown(f"<h3 style='color:{NAVY}'>Live System Schematic</h3>", unsafe_allow_html=True)
-        render_schematic(r)
-        st.markdown("---")
-        st.markdown(f"<h3 style='color:{NAVY}'>Reactor Cutaway — Hollow Fiber Internals</h3>",
-                    unsafe_allow_html=True)
-        render_reactor_diagram(r)
+        with st.expander("Live System Schematic", expanded=True):
+            render_schematic(r)
+        with st.expander("Reactor Cutaway — Hollow Fiber Internals", expanded=True):
+            render_reactor_diagram(r)
         st.markdown("---")
         render_plots(r)
         st.markdown("---")
