@@ -176,8 +176,9 @@ _PATIENT_DEFAULTS = {
 
 _BIO_DEFAULTS = {
     "V_CV1": 100.0, "V_CV2": 100.0, "A_m": 10000.0,
-    "P_m_NH3": 0.006, "P_m_urea": 0.006, "P_m_lido": 0.0042, "P_m_MEGX": 0.0048,
-    "k1_NH3": 1.0, "k1_lido": 0.85, "k_decay": 0.0001,
+    "P_m_NH3": 0.006, "P_m_urea": 0.006, "P_m_lido": 0.0042,
+    "P_m_MEGX": 0.0048, "P_m_GX": 0.0044,
+    "k1_NH3": 1.0, "k1_lido": 0.85, "k2_MEGX": 0.50, "k_decay": 0.0001,
 }
 
 
@@ -293,7 +294,7 @@ def _bioreactor_dialog():
 
     # --- Membrane permeabilities ---
     st.markdown("#### Membrane Permeability")
-    mc1, mc2, mc3, mc4 = st.columns(4)
+    mc1, mc2, mc3 = st.columns(3)
     with mc1:
         pm_nh3 = st.number_input("P_m NH\u2083", 0.0001, 0.1,
                                   value=st.session_state["_bio_P_m_NH3"],
@@ -306,15 +307,20 @@ def _bioreactor_dialog():
         pm_lido = st.number_input("P_m Lido", 0.0001, 0.1,
                                    value=st.session_state["_bio_P_m_lido"],
                                    step=0.001, format="%.4f")
+    mc4, mc5, _ = st.columns(3)
     with mc4:
         pm_megx = st.number_input("P_m MEGX", 0.0001, 0.1,
                                    value=st.session_state["_bio_P_m_MEGX"],
                                    step=0.001, format="%.4f")
+    with mc5:
+        pm_gx = st.number_input("P_m GX", 0.0001, 0.1,
+                                 value=st.session_state["_bio_P_m_GX"],
+                                 step=0.001, format="%.4f")
     st.caption("All permeabilities in cm/min.  Flux = P_m \u00d7 A_m \u00d7 \u0394C")
 
     # --- Kinetics ---
     st.markdown("#### Hepatocyte Kinetics")
-    kc1, kc2, kc3 = st.columns(3)
+    kc1, kc2, kc3, kc4 = st.columns(4)
     with kc1:
         k_nh3 = st.number_input("k\u2081 NH\u2083 (/min)", 0.01, 5.0,
                                  value=st.session_state["_bio_k1_NH3"], step=0.05,
@@ -322,8 +328,12 @@ def _bioreactor_dialog():
     with kc2:
         k_lido = st.number_input("k\u2081 Lido (/min)", 0.01, 5.0,
                                   value=st.session_state["_bio_k1_lido"], step=0.05,
-                                  help="CYP450 lidocaine metabolism rate")
+                                  help="CYP450 Lido \u2192 MEGX rate")
     with kc3:
+        k_megx = st.number_input("k\u2082 MEGX (/min)", 0.01, 5.0,
+                                  value=st.session_state["_bio_k2_MEGX"], step=0.05,
+                                  help="CYP450 MEGX \u2192 GX rate")
+    with kc4:
         k_dec = st.number_input("k_decay (/min)", 0.0, 0.01,
                                  value=st.session_state["_bio_k_decay"],
                                  step=0.0001, format="%.4f",
@@ -332,12 +342,14 @@ def _bioreactor_dialog():
     # --- KoA preview ---
     koa_nh3 = pm_nh3 * am
     koa_lido = pm_lido * am
+    koa_gx = pm_gx * am
     st.markdown(
         f"<div style='background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;"
         f"padding:10px 14px;margin-top:4px;font-size:0.85rem;color:{GRAY}'>"
         f"<strong>Derived:</strong> &nbsp; "
         f"KoA<sub>NH\u2083</sub> = {koa_nh3:,.0f} cm\u00b3/min &nbsp;\u2022&nbsp; "
         f"KoA<sub>Lido</sub> = {koa_lido:,.0f} cm\u00b3/min &nbsp;\u2022&nbsp; "
+        f"KoA<sub>GX</sub> = {koa_gx:,.0f} cm\u00b3/min &nbsp;\u2022&nbsp; "
         f"Total reactor vol = {v1 + v2:,.0f} mL"
         f"</div>",
         unsafe_allow_html=True,
@@ -360,8 +372,10 @@ def _bioreactor_dialog():
             st.session_state["_bio_P_m_urea"] = pm_urea
             st.session_state["_bio_P_m_lido"] = pm_lido
             st.session_state["_bio_P_m_MEGX"] = pm_megx
+            st.session_state["_bio_P_m_GX"] = pm_gx
             st.session_state["_bio_k1_NH3"] = k_nh3
             st.session_state["_bio_k1_lido"] = k_lido
+            st.session_state["_bio_k2_MEGX"] = k_megx
             st.session_state["_bio_k_decay"] = k_dec
             st.rerun()
 
@@ -565,8 +579,10 @@ def render_sidebar():
         "P_m_urea": st.session_state["_bio_P_m_urea"],
         "P_m_lido": st.session_state["_bio_P_m_lido"],
         "P_m_MEGX": st.session_state["_bio_P_m_MEGX"],
+        "P_m_GX": st.session_state["_bio_P_m_GX"],
         "k1_NH3": st.session_state["_bio_k1_NH3"],
         "k1_lido": st.session_state["_bio_k1_lido"],
+        "k2_MEGX": st.session_state["_bio_k2_MEGX"],
         "k_decay": st.session_state["_bio_k_decay"],
     }
     return params, adaptive, run_clicked
@@ -607,8 +623,10 @@ def run_simulation(params, adaptive):
         constants.MEMBRANE_TRANSPORT["P_m_urea"] = params["P_m_urea"]
         constants.MEMBRANE_TRANSPORT["P_m_lido"] = params["P_m_lido"]
         constants.MEMBRANE_TRANSPORT["P_m_MEGX"] = params["P_m_MEGX"]
+        constants.MEMBRANE_TRANSPORT["P_m_GX"] = params["P_m_GX"]
         constants.HEPATOCYTE_KINETICS["k1_NH3_base"] = params["k1_NH3"]
         constants.HEPATOCYTE_KINETICS["k1_lido_base"] = params["k1_lido"]
+        constants.HEPATOCYTE_KINETICS["k2_MEGX_base"] = params["k2_MEGX"]
         constants.BIOREACTOR_THRESHOLDS["k_cell_decay"] = params["k_decay"]
 
         if adaptive:
@@ -1509,8 +1527,10 @@ def render_summary(r):
                 f"| P_m Urea | {p['P_m_urea']} cm/min |\n"
                 f"| P_m Lido | {p['P_m_lido']} cm/min |\n"
                 f"| P_m MEGX | {p['P_m_MEGX']} cm/min |\n"
+                f"| P_m GX | {p['P_m_GX']} cm/min |\n"
                 f"| k\u2081 NH\u2083 | {p['k1_NH3']} /min |\n"
                 f"| k\u2081 Lido | {p['k1_lido']} /min |\n"
+                f"| k\u2082 MEGX | {p['k2_MEGX']} /min |\n"
                 f"| k_decay | {p['k_decay']} /min |"
             )
 
