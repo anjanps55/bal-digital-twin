@@ -1039,8 +1039,14 @@ def render_schematic(r):
             "bio_nh3_cv2": round(h.get("bio_C_NH3_CV2", 0), 1),
             "bio_urea_cv1": round(h.get("bio_C_urea_CV1", 0), 1),
             "bio_urea_cv2": round(h.get("bio_C_urea_CV2", 0), 1),
+            "bio_lido_cv2": round(h.get("bio_C_lido_CV2", 0) if "bio_C_lido_CV2" in h else 0, 1),
+            "bio_megx_cv1": round(h.get("bio_C_MEGX_CV1", 0), 1),
+            "bio_megx_cv2": round(h.get("bio_C_MEGX_CV2", 0), 1),
+            "bio_gx_cv1": round(h.get("bio_C_GX_CV1", 0), 1),
+            "bio_gx_cv2": round(h.get("bio_C_GX_CV2", 0), 1),
             "bio_viability": round(h.get("bio_cell_viability", 1), 3),
             "bio_clearance": round(h.get("bio_NH3_clearance", 0), 3),
+            "bio_lido_cl": round(h.get("bio_lido_clearance", 0), 3),
             "bio_state": int(h.get("bio_alarm_code", 0)),
             "mix_Q": round(h.get("mix_Q_blood", 0), 1),
             "mix_Hct": round(h.get("mix_Hct_out", 0), 3),
@@ -1061,6 +1067,39 @@ def render_schematic(r):
     components.html(html, height=620, scrolling=False)
 
 
+def render_reactor_diagram(r):
+    """Render the hollow-fiber bioreactor cutaway with reaction visualization."""
+    # Reuse the same frame data built by render_schematic
+    frames = []
+    for h in r["df"].to_dict("records"):
+        frames.append({
+            "t": round(h.get("time", 0), 1),
+            "pump_Q": round(h.get("pump_Q_plasma", 0), 1),
+            "bio_nh3": round(h.get("bio_C_NH3", 0), 1),
+            "bio_lido": round(h.get("bio_C_lido", 0), 1),
+            "bio_nh3_cv1": round(h.get("bio_C_NH3_CV1", 0), 1),
+            "bio_nh3_cv2": round(h.get("bio_C_NH3_CV2", 0), 1),
+            "bio_urea_cv1": round(h.get("bio_C_urea_CV1", 0), 1),
+            "bio_urea_cv2": round(h.get("bio_C_urea_CV2", 0), 1),
+            "bio_lido_cv2": round(h.get("bio_C_lido_CV2", 0) if "bio_C_lido_CV2" in h else 0, 1),
+            "bio_megx_cv1": round(h.get("bio_C_MEGX_CV1", 0), 1),
+            "bio_megx_cv2": round(h.get("bio_C_MEGX_CV2", 0), 1),
+            "bio_gx_cv1": round(h.get("bio_C_GX_CV1", 0), 1),
+            "bio_gx_cv2": round(h.get("bio_C_GX_CV2", 0), 1),
+            "bio_viability": round(h.get("bio_cell_viability", 1), 3),
+            "bio_clearance": round(h.get("bio_NH3_clearance", 0), 3),
+            "bio_lido_cl": round(h.get("bio_lido_clearance", 0), 3),
+        })
+
+    data_json = json.dumps(frames)
+    from reactor_diagram import build_reactor_html
+    html = build_reactor_html(
+        data_json,
+        r["params"]["NH3"], r["params"]["lido"],
+        r["params"]["V_CV1"], r["params"]["V_CV2"],
+        r["params"]["A_m"],
+    )
+    components.html(html, height=520, scrolling=False)
 
 
 # ---------------------------------------------------------------------------
@@ -1435,6 +1474,10 @@ def main():
         st.markdown("---")
         st.markdown(f"<h3 style='color:{NAVY}'>Live System Schematic</h3>", unsafe_allow_html=True)
         render_schematic(r)
+        st.markdown("---")
+        st.markdown(f"<h3 style='color:{NAVY}'>Reactor Cutaway — Hollow Fiber Internals</h3>",
+                    unsafe_allow_html=True)
+        render_reactor_diagram(r)
         st.markdown("---")
         render_plots(r)
         st.markdown("---")

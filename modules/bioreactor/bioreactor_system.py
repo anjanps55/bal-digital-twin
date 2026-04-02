@@ -273,6 +273,8 @@ class BioreactorSystem(BaseModule):
             'C_NH3_CV2': self.C_NH3_CV2,
             'C_urea_CV1': self.C_urea_CV1,
             'C_urea_CV2': self.C_urea_CV2,
+            'C_lido_CV1': self.C_lido_CV1,
+            'C_lido_CV2': self.C_lido_CV2,
             'C_MEGX_CV1': self.C_MEGX_CV1,
             'C_MEGX_CV2': self.C_MEGX_CV2,
             'C_GX_CV1': self.C_GX_CV1,
