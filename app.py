@@ -290,7 +290,7 @@ def _bioreactor_dialog():
     with gc3:
         am = st.number_input("Membrane Area (cm\u00b2)", 100.0, 50000.0,
                               value=st.session_state["_bio_A_m"], step=500.0,
-                              help="Polysulfone hollow-fiber surface area")
+                              help="Polysulfone flat-disc membrane surface area")
 
     # --- Membrane permeabilities ---
     st.markdown("#### Membrane Permeability")
@@ -1054,49 +1054,78 @@ def render_plots(r):
             f"system throughput is {n_units}\u00d7."
         )
 
-        # System architecture diagram — 2 stages × 2 parallel
+        # System architecture diagram — 2 stages × 2 parallel (CSS flexbox)
+        _unit_box = (
+            "background:#1e3a5f;padding:6px 16px;border-radius:6px;"
+            "color:#e2e8f0;font-weight:600;font-size:13px"
+        )
+        _arrow = "font-size:22px;color:#475569;line-height:1"
+        _stage_label = "font-size:10px;color:#475569"
+        _row = "display:flex;justify-content:center;align-items:center;gap:8px"
         st.markdown(
-            f"<div style='background:#1e293b;border-radius:10px;padding:16px 20px;"
-            f"margin:6px 0 10px;text-align:center;font-size:13px;color:#94a3b8;"
-            f"line-height:2'>"
-            f"<span style='color:#e2e8f0;font-weight:600'>System Architecture "
-            f"({n_units} units: {n_parallel}\u00d7 parallel \u00d7 {n_stages} stages in series)</span><br>"
+            f"<div style='background:#1e293b;border-radius:10px;padding:18px 20px;"
+            f"margin:6px 0 10px;font-size:13px;color:#94a3b8;'>"
+
+            # Title
+            f"<div style='text-align:center;margin-bottom:10px'>"
+            f"<span style='color:#e2e8f0;font-weight:600'>System Architecture</span>"
+            f"<span style='color:#475569;font-size:11px'> &mdash; "
+            f"{n_units} units: {n_parallel}\u00d7 parallel \u00d7 {n_stages} stages in series</span></div>"
+
+            # Separator row
+            f"<div style='{_row};margin-bottom:4px'>"
             f"Patient Blood (150 mL/min) \u2192 <b>Separator</b> \u2192 "
-            f"Plasma ({n_parallel}\u00d7{fg['Q_target']:.0f} = 150 mL/min)<br>"
-            # Stage 1
-            f"<span style='font-size:18px'>\u2199</span>"
-            f"&emsp;&emsp;&emsp;&emsp;&emsp;"
-            f"<span style='font-size:18px'>\u2198</span><br>"
-            f"<span style='background:#1e3a5f;padding:4px 12px;border-radius:6px;"
-            f"color:#e2e8f0;font-weight:600'>Unit A</span>"
-            f"&emsp;&emsp;"
-            f"<span style='background:#1e3a5f;padding:4px 12px;border-radius:6px;"
-            f"color:#e2e8f0;font-weight:600'>Unit B</span>"
-            f"&emsp;&emsp;"
-            f"<span style='font-size:10px;color:#475569'>\u2190 Stage 1 ({fg['Q_target']:.0f} mL/min each)</span><br>"
-            f"<span style='font-size:18px'>\u2198</span>"
-            f"&emsp;&emsp;&emsp;&emsp;&emsp;"
-            f"<span style='font-size:18px'>\u2199</span><br>"
+            f"Plasma ({n_parallel}\u00d7{fg['Q_target']:.0f} = 150 mL/min)</div>"
+
+            # Fan-out arrows for stage 1
+            f"<div style='{_row}'>"
+            f"<span style='{_arrow}'>\u2198</span>"
+            f"<span style='width:80px'></span>"
+            f"<span style='{_arrow}'>\u2199</span></div>"
+
+            # Stage 1 units
+            f"<div style='{_row}'>"
+            f"<span style='{_unit_box}'>Unit A</span>"
+            f"<span style='{_unit_box}'>Unit B</span>"
+            f"<span style='{_stage_label};margin-left:12px'>\u2190 Stage 1 ({fg['Q_target']:.0f} mL/min each)</span></div>"
+
+            # Fan-in arrows from stage 1
+            f"<div style='{_row}'>"
+            f"<span style='{_arrow}'>\u2199</span>"
+            f"<span style='width:80px'></span>"
+            f"<span style='{_arrow}'>\u2198</span></div>"
+
             # Merge + re-split
-            f"<span style='color:#64748b;font-size:11px'>Merge (150 mL/min) \u2192 Re-split</span><br>"
-            # Stage 2
-            f"<span style='font-size:18px'>\u2199</span>"
-            f"&emsp;&emsp;&emsp;&emsp;&emsp;"
-            f"<span style='font-size:18px'>\u2198</span><br>"
-            f"<span style='background:#1e3a5f;padding:4px 12px;border-radius:6px;"
-            f"color:#e2e8f0;font-weight:600'>Unit C</span>"
-            f"&emsp;&emsp;"
-            f"<span style='background:#1e3a5f;padding:4px 12px;border-radius:6px;"
-            f"color:#e2e8f0;font-weight:600'>Unit D</span>"
-            f"&emsp;&emsp;"
-            f"<span style='font-size:10px;color:#475569'>\u2190 Stage 2 ({fg['Q_target']:.0f} mL/min each)</span><br>"
-            f"<span style='font-size:18px'>\u2198</span>"
-            f"&emsp;&emsp;&emsp;&emsp;&emsp;"
-            f"<span style='font-size:18px'>\u2199</span><br>"
-            f"<b>Mixer</b> \u2192 Patient Return (150 mL/min)<br>"
-            f"<span style='font-size:9px;color:#475569'>"
+            f"<div style='{_row};margin:2px 0'>"
+            f"<span style='color:#64748b;font-size:11px'>Merge (150 mL/min) \u2192 Re-split</span></div>"
+
+            # Fan-out arrows for stage 2
+            f"<div style='{_row}'>"
+            f"<span style='{_arrow}'>\u2198</span>"
+            f"<span style='width:80px'></span>"
+            f"<span style='{_arrow}'>\u2199</span></div>"
+
+            # Stage 2 units
+            f"<div style='{_row}'>"
+            f"<span style='{_unit_box}'>Unit C</span>"
+            f"<span style='{_unit_box}'>Unit D</span>"
+            f"<span style='{_stage_label};margin-left:12px'>\u2190 Stage 2 ({fg['Q_target']:.0f} mL/min each)</span></div>"
+
+            # Fan-in arrows from stage 2
+            f"<div style='{_row}'>"
+            f"<span style='{_arrow}'>\u2199</span>"
+            f"<span style='width:80px'></span>"
+            f"<span style='{_arrow}'>\u2198</span></div>"
+
+            # Mixer
+            f"<div style='{_row};margin-top:4px'>"
+            f"<b>Mixer</b> \u2192 Patient Return (150 mL/min)</div>"
+
+            # Specs
+            f"<div style='text-align:center;margin-top:8px;font-size:9px;color:#475569'>"
             f"Each unit: 35\u00d720 cm &bull; 7.15 L &bull; 314 cm\u00b2 &bull; "
-            f"3.6\u00d710\u2079 cells &bull; {fg['V_CV1']/fg['Q_target']:.1f} min residence time</span>"
+            f"3.6\u00d710\u2079 cells &bull; {fg['V_CV1']/fg['Q_target']:.1f} min residence time</div>"
+
             f"</div>",
             unsafe_allow_html=True,
         )
@@ -1110,7 +1139,7 @@ def render_plots(r):
                 f"| CV2 Volume | {cur_p['V_CV2']:.0f} mL | {fg['V_CV2']:,.0f} mL | {n_units*fg['V_CV2']:,.0f} mL |\n"
                 f"| Total Volume | {cur_p['V_CV1']+cur_p['V_CV2']:.0f} mL | {fg['V_CV1']+fg['V_CV2']:,.0f} mL | {n_units*(fg['V_CV1']+fg['V_CV2']):,.0f} mL |\n"
                 f"| Membrane Area | {cur_p['A_m']:,.0f} cm\u00b2 | {fg['A_m']:.0f} cm\u00b2 | {n_units*fg['A_m']:.0f} cm\u00b2 |\n"
-                f"| Membrane Type | Hollow Fiber | Flat Disc | \u2014 |\n"
+                f"| Membrane Type | Flat Disc | Flat Disc | \u2014 |\n"
                 f"| P_m NH\u2083 | {cur_p['P_m_NH3']} cm/min | {fg['P_m_NH3']} cm/min | \u2014 |\n"
                 f"| P_m Lido | {cur_p['P_m_lido']} cm/min | {fg['P_m_lido']} cm/min | \u2014 |\n"
                 f"| Flow/Unit | {cur_p['Q_target']:.0f} mL/min | {fg['Q_target']:.0f} mL/min | {n_parallel*fg['Q_target']:.0f} mL/min |\n"
@@ -1237,9 +1266,9 @@ def render_plots(r):
         fd_nh3_cl = fd_last.get("bio_NH3_clearance", 0) * 100
         fd_lido_cl = fd_last.get("bio_lido_clearance", 0) * 100
         # Stage 1 outlet (from s1_ prefixed columns)
-        s1_nh3 = fd_last.get("s1_bio_C_NH3", p["NH3"])
-        s1_lido = fd_last.get("s1_bio_C_lido", p["lido"])
-        s1_nh3_cl = (p["NH3"] - s1_nh3) / p["NH3"] * 100 if p["NH3"] > 0 else 0
+        s1_nh3 = fd_last.get("s1_bio_C_NH3", cur_p["NH3"])
+        s1_lido = fd_last.get("s1_bio_C_lido", cur_p["lido"])
+        s1_nh3_cl = (cur_p["NH3"] - s1_nh3) / cur_p["NH3"] * 100 if cur_p["NH3"] > 0 else 0
 
         with c1:
             st.markdown(
@@ -1286,14 +1315,13 @@ def render_plots(r):
             f"padding:12px 16px;margin-top:10px;font-size:13px;color:#94a3b8;line-height:1.6'>"
             f"<span style='color:{AMBER};font-weight:700'>Engineering Insight:</span> "
             f"The flat-disc design has a KoA of {koa_fd:.1f} cm\u00b3/min per unit "
-            f"({n_units*koa_fd:.1f} combined) vs {koa_cur:.0f} for the hollow-fiber. "
-            f"This {koa_cur/koa_fd:.0f}\u00d7 reduction in mass transfer capacity is "
-            f"partially offset by {fg['V_CV1']/fg['Q_target']:.0f}\u00d7 longer residence "
-            f"time ({fg['V_CV1']/fg['Q_target']:.1f} min vs "
-            f"{cur_p['V_CV1']/max(cur_p['Q_target'],1):.1f} min), but the system remains "
-            f"<b>membrane-limited</b>. To improve clearance, the team could consider "
-            f"stacked membrane discs, a corrugated membrane surface, or hollow-fiber "
-            f"inserts within the cylindrical shell."
+            f"({n_units*koa_fd:.1f} combined) vs {koa_cur:.0f} for the current sidebar config. "
+            f"The flat-disc design uses a {fg['V_CV1']/fg['Q_target']:.0f}-minute residence time "
+            f"per unit to compensate for the smaller membrane area. The 2-stage series "
+            f"configuration provides two sequential treatment passes, improving overall "
+            f"clearance beyond what a single pass achieves. To further improve performance, "
+            f"the team could consider stacked membrane discs or a corrugated membrane surface "
+            f"to increase A_m within the same cartridge footprint."
             f"</div>",
             unsafe_allow_html=True,
         )
@@ -1467,7 +1495,7 @@ def render_schematic(r):
 
 
 def render_reactor_diagram(r):
-    """Render the hollow-fiber bioreactor cutaway with reaction visualization."""
+    """Render the bioreactor cutaway with reaction visualization."""
     # Reuse the same frame data built by render_schematic
     frames = []
     for h in r["df"].to_dict("records"):
@@ -1672,7 +1700,7 @@ def render_explainer(r):
         f"{p['Q_blood']:.0f} mL/min for **{dur} minutes**. The plasma separator "
         f"first split the blood into plasma and cellular components (RBCs, WBCs, "
         f"platelets). Only the plasma\u2014carrying the dissolved toxins\u2014was "
-        f"pumped through the hollow-fiber bioreactor at {p['Q_target']:.0f} mL/min. "
+        f"pumped through the bioreactor at {p['Q_target']:.0f} mL/min. "
         f"The cellular components bypassed the bioreactor and were recombined with "
         f"the treated plasma in the mixer before returning to the patient."
     )
@@ -1806,7 +1834,7 @@ def render_about():
 Acute hepatic failure has limited treatment options beyond liver transplantation,
 which is constrained by donor shortages and time pressure (50-80% mortality).
 This digital twin simulates an extracorporeal BAL device that processes patient
-blood through a hollow-fiber bioreactor containing viable hepatocytes.
+blood through a flat-disc membrane bioreactor containing viable hepatocytes.
 
 **System Pipeline:**
 Plasma Separator \u2192 Pump Control \u2192 Bioreactor \u2192 Sampler \u2192 Mixer \u2192 Return Monitor
@@ -1875,7 +1903,7 @@ def main():
         st.markdown("---")
         with st.expander("Live System Schematic", expanded=True):
             render_schematic(r)
-        with st.expander("Reactor Cutaway — Hollow Fiber Internals", expanded=True):
+        with st.expander("Reactor Cutaway — Bioreactor Internals", expanded=True):
             render_reactor_diagram(r)
         st.markdown("---")
         render_plots(r)

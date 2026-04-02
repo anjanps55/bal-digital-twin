@@ -30,7 +30,7 @@ body{{font-family:Inter,-apple-system,sans-serif;background:#0f172a;color:#e2e8f
 /* Fiber bundle area */
 #fibers{{flex:1;display:flex;flex-direction:column;justify-content:center;padding:0 16px;gap:4px;position:relative}}
 
-/* Single hollow fiber */
+/* Single fiber/compartment row */
 .fiber{{display:flex;align-items:stretch;height:52px;position:relative}}
 .fiber-lumen{{flex:1;border-radius:8px;position:relative;overflow:hidden;border:1.5px solid #475569}}
 .lumen-inner{{position:absolute;inset:2px;border-radius:6px;transition:background 0.4s}}
@@ -92,7 +92,7 @@ body{{font-family:Inter,-apple-system,sans-serif;background:#0f172a;color:#e2e8f
 <div id="root">
 
 <div class="hdr">
-  <h3>Hollow-Fiber Bioreactor Cross-Section</h3>
+  <h3>Flat-Disc Bioreactor Cross-Section</h3>
   <span id="tl2">t = 0 min</span>
 </div>
 
@@ -108,7 +108,7 @@ body{{font-family:Inter,-apple-system,sans-serif;background:#0f172a;color:#e2e8f
 
   <!-- Bioreactor shell -->
   <div id="shell">
-    <div id="shell-label">Bioreactor Shell &mdash; Polysulfone Hollow Fiber Bundle</div>
+    <div id="shell-label">Bioreactor Shell &mdash; Polysulfone Flat-Disc Membrane (35&times;20 cm cylindrical cartridge)</div>
 
     <div id="fibers">
       <!-- Fiber 1 (NH3/Urea pathway) -->
