@@ -1022,83 +1022,131 @@ def render_plots(r):
     with tab6:
         fg = _FINAL_DOC_GEOMETRY
         cur_p = r["params"]
+        n_units = 2  # Document specifies 2 units in parallel
 
         st.markdown(
-            "Comparing the **current simulation geometry** (hollow-fiber, configured in sidebar) "
-            "against the **final design document** (flat-disc cylindrical cartridge, 35\u00d720 cm). "
-            "Both use the same patient inlet concentrations and treatment duration."
+            f"Comparing the **current simulation geometry** against the "
+            f"**final design document**: {n_units} cylindrical cartridges "
+            f"(35\u00d720 cm each) operating **in parallel**. Patient blood "
+            f"(150 mL/min) is split equally \u2014 each unit receives "
+            f"{fg['Q_target']:.0f} mL/min of plasma. Since both units are "
+            f"identical, one simulation gives per-unit clearance; combined "
+            f"system throughput is {n_units}\u00d7."
+        )
+
+        # System architecture diagram
+        st.markdown(
+            f"<div style='background:#1e293b;border-radius:10px;padding:14px 20px;"
+            f"margin:6px 0 10px;text-align:center;font-size:13px;color:#94a3b8;"
+            f"line-height:1.8'>"
+            f"<span style='color:#e2e8f0;font-weight:600'>System Architecture:</span><br>"
+            f"Patient Blood (150 mL/min) \u2192 <b>Separator</b> \u2192 "
+            f"Plasma ({n_units}\u00d7{fg['Q_target']:.0f} = {n_units*fg['Q_target']:.0f} mL/min)<br>"
+            f"<span style='font-size:20px'>\u2199</span>"
+            f"&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;"
+            f"<span style='font-size:20px'>\u2198</span><br>"
+            f"<span style='background:#1e3a5f;padding:4px 12px;border-radius:6px;"
+            f"color:#e2e8f0;font-weight:600'>Unit A</span>"
+            f"&emsp;"
+            f"<span style='background:#1e3a5f;padding:4px 12px;border-radius:6px;"
+            f"color:#e2e8f0;font-weight:600'>Unit B</span><br>"
+            f"<span style='font-size:10px;color:#64748b'>"
+            f"35\u00d720 cm &bull; 7.15 L &bull; 314 cm\u00b2 &bull; "
+            f"3.6\u00d710\u2079 cells</span>"
+            f"&emsp;"
+            f"<span style='font-size:10px;color:#64748b'>"
+            f"35\u00d720 cm &bull; 7.15 L &bull; 314 cm\u00b2 &bull; "
+            f"3.6\u00d710\u2079 cells</span><br>"
+            f"<span style='font-size:20px'>\u2198</span>"
+            f"&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;"
+            f"<span style='font-size:20px'>\u2199</span><br>"
+            f"<b>Mixer</b> \u2192 Patient Return (150 mL/min)"
+            f"</div>",
+            unsafe_allow_html=True,
         )
 
         # Parameter comparison table
         with st.expander("Parameter Comparison Table", expanded=False):
             st.markdown(
-                "| Parameter | Current (Sidebar) | Final Document |\n"
-                "|---|---|---|\n"
-                f"| CV1 Volume | {cur_p['V_CV1']:.0f} mL | {fg['V_CV1']:,.0f} mL |\n"
-                f"| CV2 Volume | {cur_p['V_CV2']:.0f} mL | {fg['V_CV2']:,.0f} mL |\n"
-                f"| Membrane Area | {cur_p['A_m']:,.0f} cm\u00b2 | {fg['A_m']:.0f} cm\u00b2 |\n"
-                f"| Membrane Type | Hollow Fiber | Flat Disc |\n"
-                f"| P_m NH\u2083 | {cur_p['P_m_NH3']} cm/min | {fg['P_m_NH3']} cm/min |\n"
-                f"| P_m Lido | {cur_p['P_m_lido']} cm/min | {fg['P_m_lido']} cm/min |\n"
-                f"| Flow/Unit | {cur_p['Q_target']:.0f} mL/min | {fg['Q_target']:.0f} mL/min |\n"
-                f"| Residence Time | {cur_p['V_CV1']/max(cur_p['Q_target'],1):.1f} min | {fg['V_CV1']/fg['Q_target']:.1f} min |\n"
-                f"| Hematocrit | {cur_p['Hct']:.2f} | {fg['Hct']:.2f} |\n"
-                f"| Cell Count | 5\u00d710\u2078 | 3.6\u00d710\u2079 |\n"
-                f"| Cartridge | Abstract | 35\u00d720 cm cylinder |\n"
-                f"| Configuration | Single unit | 2 units parallel |"
+                "| Parameter | Current (Sidebar) | Final Design (per unit) | Final Design (system) |\n"
+                "|---|---|---|---|\n"
+                f"| CV1 Volume | {cur_p['V_CV1']:.0f} mL | {fg['V_CV1']:,.0f} mL | {n_units*fg['V_CV1']:,.0f} mL |\n"
+                f"| CV2 Volume | {cur_p['V_CV2']:.0f} mL | {fg['V_CV2']:,.0f} mL | {n_units*fg['V_CV2']:,.0f} mL |\n"
+                f"| Total Volume | {cur_p['V_CV1']+cur_p['V_CV2']:.0f} mL | {fg['V_CV1']+fg['V_CV2']:,.0f} mL | {n_units*(fg['V_CV1']+fg['V_CV2']):,.0f} mL |\n"
+                f"| Membrane Area | {cur_p['A_m']:,.0f} cm\u00b2 | {fg['A_m']:.0f} cm\u00b2 | {n_units*fg['A_m']:.0f} cm\u00b2 |\n"
+                f"| Membrane Type | Hollow Fiber | Flat Disc | \u2014 |\n"
+                f"| P_m NH\u2083 | {cur_p['P_m_NH3']} cm/min | {fg['P_m_NH3']} cm/min | \u2014 |\n"
+                f"| P_m Lido | {cur_p['P_m_lido']} cm/min | {fg['P_m_lido']} cm/min | \u2014 |\n"
+                f"| Flow Rate | {cur_p['Q_target']:.0f} mL/min | {fg['Q_target']:.0f} mL/min | {n_units*fg['Q_target']:.0f} mL/min |\n"
+                f"| Residence Time | {cur_p['V_CV1']/max(cur_p['Q_target'],1):.1f} min | {fg['V_CV1']/fg['Q_target']:.1f} min | \u2014 |\n"
+                f"| KoA (NH\u2083) | {cur_p['P_m_NH3']*cur_p['A_m']:.0f} cm\u00b3/min | {fg['P_m_NH3']*fg['A_m']:.1f} cm\u00b3/min | {n_units*fg['P_m_NH3']*fg['A_m']:.1f} cm\u00b3/min |\n"
+                f"| Hematocrit | {cur_p['Hct']:.2f} | {fg['Hct']:.2f} | \u2014 |\n"
+                f"| Cell Count | 5\u00d710\u2078 | 3.6\u00d710\u2079 | 7.2\u00d710\u2079 |\n"
+                f"| Cartridge | Abstract | 35\u00d720 cm cyl. | {n_units}\u00d7 parallel |\n"
+                f"| Units | 1 | 1 | {n_units} |"
             )
 
-        # Run the final design simulation
+        # Run the final design simulation (one unit)
         if "final_design_df" not in st.session_state or st.session_state.get("_fd_hash") != id(r):
-            with st.spinner("Running final design simulation..."):
+            with st.spinner("Running final design simulation (per unit)..."):
                 st.session_state.final_design_df = _run_final_design_sim(r)
                 st.session_state._fd_hash = id(r)
 
         df_fd = st.session_state.final_design_df
         t_fd = df_fd["time"]
 
-        # ---- Subplot 1: NH3 comparison ----
+        # ---- Main comparison charts ----
         fig = make_subplots(rows=2, cols=2, horizontal_spacing=0.12,
                             vertical_spacing=0.18,
                             subplot_titles=[
-                                "NH\u2083 Outlet Concentration",
-                                "Lidocaine Outlet Concentration",
+                                "NH\u2083 Outlet (\u00b5mol/L)",
+                                "Lidocaine Outlet (\u00b5mol/L)",
                                 "NH\u2083 Clearance (%)",
                                 "Cell Viability (%)",
                             ])
 
         # NH3
-        fig.add_trace(go.Scatter(x=t, y=df["bio_C_NH3"], name="Current \u2014 NH\u2083",
+        fig.add_trace(go.Scatter(x=t, y=df["bio_C_NH3"], name="Current",
                                  line=dict(color=NAVY, width=2.5)), row=1, col=1)
-        fig.add_trace(go.Scatter(x=t_fd, y=df_fd["bio_C_NH3"], name="Final Design \u2014 NH\u2083",
-                                 line=dict(color=NAVY, width=2.5, dash="dash")), row=1, col=1)
-        fig.add_hline(y=50, line_dash="dot", line_color=RED, line_width=1,
-                      annotation_text="Safe limit", annotation_position="bottom left",
-                      annotation_font_size=9, annotation_font_color=RED, row=1, col=1)
+        fig.add_trace(go.Scatter(x=t_fd, y=df_fd["bio_C_NH3"],
+                                 name=f"Final ({n_units} units)",
+                                 line=dict(color=RED, width=2.5, dash="dash")), row=1, col=1)
+        fig.add_hline(y=50, line_dash="dot", line_color=GRAY, line_width=1,
+                      annotation_text="Safe limit (50)", annotation_position="bottom left",
+                      annotation_font_size=9, annotation_font_color=GRAY, row=1, col=1)
         fig.update_yaxes(title_text="\u00b5mol/L", row=1, col=1)
 
         # Lido
-        fig.add_trace(go.Scatter(x=t, y=df["bio_C_lido"], name="Current \u2014 Lido",
-                                 line=dict(color=INDIGO, width=2.5)), row=1, col=2)
-        fig.add_trace(go.Scatter(x=t_fd, y=df_fd["bio_C_lido"], name="Final Design \u2014 Lido",
-                                 line=dict(color=INDIGO, width=2.5, dash="dash")), row=1, col=2)
-        fig.add_hline(y=12, line_dash="dot", line_color=AMBER, line_width=1,
-                      annotation_text="Safe limit", annotation_position="bottom left",
-                      annotation_font_size=9, annotation_font_color=AMBER, row=1, col=2)
+        fig.add_trace(go.Scatter(x=t, y=df["bio_C_lido"], name="Current",
+                                 line=dict(color=NAVY, width=2.5),
+                                 showlegend=False), row=1, col=2)
+        fig.add_trace(go.Scatter(x=t_fd, y=df_fd["bio_C_lido"],
+                                 name=f"Final ({n_units} units)",
+                                 line=dict(color=RED, width=2.5, dash="dash"),
+                                 showlegend=False), row=1, col=2)
+        fig.add_hline(y=15, line_dash="dot", line_color=GRAY, line_width=1,
+                      annotation_text="Safe limit (15)", annotation_position="bottom left",
+                      annotation_font_size=9, annotation_font_color=GRAY, row=1, col=2)
         fig.update_yaxes(title_text="\u00b5mol/L", row=1, col=2)
 
         # NH3 Clearance
-        fig.add_trace(go.Scatter(x=t, y=df["bio_NH3_clearance"]*100, name="Current \u2014 Clear.",
-                                 line=dict(color=GREEN, width=2.5)), row=2, col=1)
-        fig.add_trace(go.Scatter(x=t_fd, y=df_fd["bio_NH3_clearance"]*100, name="Final Design \u2014 Clear.",
-                                 line=dict(color=GREEN, width=2.5, dash="dash")), row=2, col=1)
+        fig.add_trace(go.Scatter(x=t, y=df["bio_NH3_clearance"]*100, name="Current",
+                                 line=dict(color=NAVY, width=2.5),
+                                 showlegend=False), row=2, col=1)
+        fig.add_trace(go.Scatter(x=t_fd, y=df_fd["bio_NH3_clearance"]*100,
+                                 name=f"Final ({n_units} units)",
+                                 line=dict(color=RED, width=2.5, dash="dash"),
+                                 showlegend=False), row=2, col=1)
         fig.update_yaxes(title_text="%", row=2, col=1)
 
         # Viability
-        fig.add_trace(go.Scatter(x=t, y=df["bio_cell_viability"]*100, name="Current \u2014 Viab.",
-                                 line=dict(color=TEAL, width=2.5)), row=2, col=2)
-        fig.add_trace(go.Scatter(x=t_fd, y=df_fd["bio_cell_viability"]*100, name="Final Design \u2014 Viab.",
-                                 line=dict(color=TEAL, width=2.5, dash="dash")), row=2, col=2)
+        fig.add_trace(go.Scatter(x=t, y=df["bio_cell_viability"]*100, name="Current",
+                                 line=dict(color=NAVY, width=2.5),
+                                 showlegend=False), row=2, col=2)
+        fig.add_trace(go.Scatter(x=t_fd, y=df_fd["bio_cell_viability"]*100,
+                                 name=f"Final ({n_units} units)",
+                                 line=dict(color=RED, width=2.5, dash="dash"),
+                                 showlegend=False), row=2, col=2)
         fig.update_yaxes(title_text="%", row=2, col=2)
 
         for row in (1, 2):
@@ -1106,11 +1154,11 @@ def render_plots(r):
                 fig.update_xaxes(title_text="Time (min)", row=row, col=col)
 
         _fig_layout(fig, height=650,
-                    title="Current Geometry (solid) vs Final Design Document (dashed)")
+                    title=f"Current (solid) vs Final Design \u2014 {n_units} Units Parallel (dashed)")
         _show_chart(fig)
 
         # Two-compartment detail for final design
-        st.markdown(f"#### Final Design \u2014 Two-Compartment Detail")
+        st.markdown(f"#### Final Design \u2014 Per-Unit Two-Compartment Detail")
         fig2 = make_subplots(rows=1, cols=3, horizontal_spacing=0.1,
                              subplot_titles=[
                                  "NH\u2083 CV1 vs CV2",
@@ -1142,46 +1190,75 @@ def render_plots(r):
         for col in (1, 2, 3):
             fig2.update_xaxes(title_text="Time (min)", row=1, col=col)
         _fig_layout(fig2, height=400,
-                    title="Final Design (35\u00d720 cm, 314 cm\u00b2 flat disc, 75 mL/min)")
+                    title=f"Per-Unit Detail (35\u00d720 cm, 314 cm\u00b2 flat disc, {fg['Q_target']:.0f} mL/min)")
         _show_chart(fig2)
 
-        # Summary metrics comparison
+        # Summary metrics comparison — 3 columns: current, per-unit, combined system
         st.markdown(f"#### End-of-Treatment Comparison (t = {r['duration']} min)")
-        c1, c2 = st.columns(2)
+        c1, c2, c3 = st.columns(3)
+        bio_cur = r["final"]["bioreactor"]
+        fd_last = df_fd.iloc[-1]
+        fd_nh3_cl = fd_last.get("bio_NH3_clearance", 0) * 100
+        fd_lido_cl = fd_last.get("bio_lido_clearance", 0) * 100
+
         with c1:
-            bio_cur = r["final"]["bioreactor"]
             st.markdown(
                 f"**Current Geometry**\n\n"
                 f"| Metric | Value |\n|---|---|\n"
+                f"| Units | 1 |\n"
                 f"| NH\u2083 outlet | {bio_cur['C_NH3']:.1f} \u00b5mol/L |\n"
                 f"| Lido outlet | {bio_cur['C_lido']:.1f} \u00b5mol/L |\n"
                 f"| NH\u2083 clearance | {bio_cur['NH3_clearance']*100:.1f}% |\n"
                 f"| Lido clearance | {bio_cur['lido_clearance']*100:.1f}% |\n"
                 f"| Cell viability | {bio_cur['cell_viability']*100:.1f}% |\n"
-                f"| Residence time | {cur_p['V_CV1']/max(cur_p['Q_target'],1):.1f} min |"
+                f"| Res. time | {cur_p['V_CV1']/max(cur_p['Q_target'],1):.1f} min |\n"
+                f"| KoA NH\u2083 | {cur_p['P_m_NH3']*cur_p['A_m']:.0f} cm\u00b3/min |"
             )
         with c2:
-            fd_last = df_fd.iloc[-1]
-            fd_nh3_cl = fd_last.get("bio_NH3_clearance", 0) * 100
-            fd_lido_cl = fd_last.get("bio_lido_clearance", 0) * 100
             st.markdown(
                 f"**Final Design (per unit)**\n\n"
                 f"| Metric | Value |\n|---|---|\n"
+                f"| Units | 1 of {n_units} |\n"
                 f"| NH\u2083 outlet | {fd_last['bio_C_NH3']:.1f} \u00b5mol/L |\n"
                 f"| Lido outlet | {fd_last['bio_C_lido']:.1f} \u00b5mol/L |\n"
                 f"| NH\u2083 clearance | {fd_nh3_cl:.1f}% |\n"
                 f"| Lido clearance | {fd_lido_cl:.1f}% |\n"
                 f"| Cell viability | {fd_last['bio_cell_viability']*100:.1f}% |\n"
-                f"| Residence time | {fg['V_CV1']/fg['Q_target']:.1f} min |"
+                f"| Res. time | {fg['V_CV1']/fg['Q_target']:.1f} min |\n"
+                f"| KoA NH\u2083 | {fg['P_m_NH3']*fg['A_m']:.1f} cm\u00b3/min |"
+            )
+        with c3:
+            st.markdown(
+                f"**Final Design (system: {n_units} units)**\n\n"
+                f"| Metric | Value |\n|---|---|\n"
+                f"| Units | {n_units} parallel |\n"
+                f"| NH\u2083 outlet | {fd_last['bio_C_NH3']:.1f} \u00b5mol/L |\n"
+                f"| Lido outlet | {fd_last['bio_C_lido']:.1f} \u00b5mol/L |\n"
+                f"| NH\u2083 clearance | {fd_nh3_cl:.1f}% |\n"
+                f"| Total throughput | {n_units*fg['Q_target']:.0f} mL/min |\n"
+                f"| Total volume | {n_units*(fg['V_CV1']+fg['V_CV2'])/1000:.1f} L |\n"
+                f"| Total cells | {n_units*3.6e9:.1e} |\n"
+                f"| Total A_m | {n_units*fg['A_m']:.0f} cm\u00b2 |"
             )
 
-        st.caption(
-            "**Current Geometry:** Configured via sidebar (hollow-fiber defaults: "
-            f"CV1/CV2 {cur_p['V_CV1']:.0f} mL, A_m {cur_p['A_m']:,.0f} cm\u00b2, "
-            f"Q {cur_p['Q_target']:.0f} mL/min)  \u2022  "
-            "**Final Design:** From BAL_Complete_Final_Document.docx "
-            f"(flat disc: CV1/CV2 {fg['V_CV1']:,.0f} mL, A_m {fg['A_m']:.0f} cm\u00b2, "
-            f"Q {fg['Q_target']:.0f} mL/min per unit, 2 units parallel for 150 mL/min)"
+        # Engineering insight callout
+        koa_cur = cur_p["P_m_NH3"] * cur_p["A_m"]
+        koa_fd = fg["P_m_NH3"] * fg["A_m"]
+        st.markdown(
+            f"<div style='background:#1e293b;border-left:4px solid {AMBER};border-radius:8px;"
+            f"padding:12px 16px;margin-top:10px;font-size:13px;color:#94a3b8;line-height:1.6'>"
+            f"<span style='color:{AMBER};font-weight:700'>Engineering Insight:</span> "
+            f"The flat-disc design has a KoA of {koa_fd:.1f} cm\u00b3/min per unit "
+            f"({n_units*koa_fd:.1f} combined) vs {koa_cur:.0f} for the hollow-fiber. "
+            f"This {koa_cur/koa_fd:.0f}\u00d7 reduction in mass transfer capacity is "
+            f"partially offset by {fg['V_CV1']/fg['Q_target']:.0f}\u00d7 longer residence "
+            f"time ({fg['V_CV1']/fg['Q_target']:.1f} min vs "
+            f"{cur_p['V_CV1']/max(cur_p['Q_target'],1):.1f} min), but the system remains "
+            f"<b>membrane-limited</b>. To improve clearance, the team could consider "
+            f"stacked membrane discs, a corrugated membrane surface, or hollow-fiber "
+            f"inserts within the cylindrical shell."
+            f"</div>",
+            unsafe_allow_html=True,
         )
 
 
