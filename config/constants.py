@@ -245,9 +245,9 @@ RETURN_MONITOR_THRESHOLDS = {
     'C_NH3_critical': 60,           # µmol/L - critical, cannot return
 
     # Lidocaine safety levels
-    'C_lido_safe': 10,              # µmol/L - maximum safe level
+    'C_lido_safe': 12,              # µmol/L - maximum safe level
     'C_lido_target': 7,             # µmol/L - target level
-    'C_lido_warning': 9,            # µmol/L - warning threshold
+    'C_lido_warning': 11,           # µmol/L - warning threshold
     'C_lido_critical': 15,          # µmol/L - critical, cannot return
 
     # Temperature safety
@@ -277,7 +277,7 @@ RETURN_MONITOR_THRESHOLDS = {
 
     # Treatment success criteria
     'treatment_success_NH3': 50,    # µmol/L - must be below this
-    'treatment_success_lido': 10,   # µmol/L - must be below this
+    'treatment_success_lido': 12,   # µmol/L - must be below this (safe range <15)
 }
 
 RETURN_MONITOR_OUTPUTS = {

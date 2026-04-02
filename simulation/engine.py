@@ -106,9 +106,20 @@ class SimulationEngine:
 
         # Module 5: Mixer
         # Now receives TREATED plasma from bioreactor!
+        # Scale Q_cells so the mixer output hematocrit matches the patient's
+        # inlet hematocrit.  The separator produces Q_cells based on full
+        # Q_blood, but only a fraction of the plasma (pump-controlled) goes
+        # through the bioreactor.  To keep mass balance and hematocrit
+        # correct, match Q_cells to actual Q_plasma using the original
+        # filtration fraction:  Q_cells = Q_plasma * Hct_in / (1 - Hct_in).
+        from config.constants import SEPARATOR_INPUTS
+        hct_in = SEPARATOR_INPUTS['Hct_in_nominal']
+        actual_Q_plasma = sampler_outputs['Q_plasma']
+        balanced_Q_cells = actual_Q_plasma * hct_in / (1.0 - hct_in) if hct_in < 1 else actual_Q_plasma
+
         mixer_inputs = {
-            'Q_plasma': sampler_outputs['Q_plasma'],
-            'Q_cells': sep_outputs['Q_cells'],
+            'Q_plasma': actual_Q_plasma,
+            'Q_cells': balanced_Q_cells,
             'P_plasma': bio_outputs['P_plasma'],
             'P_cells': sep_outputs.get('P_cells', 90.0),
             'T_plasma': bio_outputs['T_plasma'],
