@@ -392,21 +392,24 @@ MEMBRANE_TRANSPORT = {
     'P_m_urea': 0.006,  # cm/min - Scaled for 10× larger A_m (~0.001 cm/min * 60)
     'P_m_lido': 0.0042,  # cm/min - Scaled for 10× larger A_m (0.0007 cm/min * 60)
     'P_m_MEGX': 0.0048,  # cm/min - Scaled for 10× larger A_m (0.0008 cm/min * 60)
+    'P_m_GX': 0.0044,    # cm/min - GX (MW ~179) slightly less permeable than MEGX (MW ~207)
 }
 
 # Hepatocyte Reaction Kinetics (from Section 3.5)
 HEPATOCYTE_KINETICS = {
     # NH3 removal rate: 21.7 µg/10⁶ cells/day (porcine hepatocytes)
-    # Convert to µmol/min for 5×10⁸ cells:
-    # 21.7e-6 g/10⁶cells/day × 5×10⁸ cells / (17 g/mol) / (24×60 min/day)
-    'k1_NH3_base': 1.0,       # 1/min - First-order rate constant (base)
-    
+    'k1_NH3_base': 1.0,        # 1/min - First-order rate constant (base)
+
     # Lidocaine: ~80% of urea cycle rate (approximate from CYP450 data)
-    'k1_lido_base': 0.85,      # 1/min - First-order rate constant (base)
-    
+    'k1_lido_base': 0.85,       # 1/min - Lido → MEGX (CYP3A4 N-deethylation)
+
+    # MEGX → GX: secondary CYP450 N-dealkylation, ~60% of primary rate
+    'k2_MEGX_base': 0.50,       # 1/min - MEGX → GX conversion rate
+
     # Stoichiometry
     'urea_stoich': 0.5,          # 2 NH3 → 1 urea (factor of 1/2)
     'MEGX_stoich': 1.0,          # 1:1 lidocaine → MEGX
+    'GX_stoich': 1.0,            # 1:1 MEGX → GX
 }
 
 # Initial Conditions for Compartments
@@ -416,66 +419,13 @@ BIOREACTOR_INITIAL = {
     'C_lido_CV1_frac': 1.0,
     'C_urea_CV1_frac': 1.0,
     'C_MEGX_CV1': 0.0,           # µmol/L - Initially zero
-    
+    'C_GX_CV1': 0.0,             # µmol/L - Initially zero
+
     # CV2 starts at ~50% of inlet (equilibration assumption)
     'C_NH3_CV2_frac': 0.5,
     'C_lido_CV2_frac': 0.5,
     'C_urea_CV2_frac': 1.0,
     'C_MEGX_CV2': 0.0,
-}
-
-
-# ============= BIOREACTOR: TWO-COMPARTMENT MASS BALANCE PARAMETERS =============
-
-# Control Volume Sizes
-BIOREACTOR_VOLUMES = {
-    'V_CV1': 100.0,              # mL - Plasma compartment volume
-    'V_CV2': 100.0,              # mL - Hepatocyte compartment volume
-}
-
-# Membrane Transport Parameters (from BAL_Mass_Balance_Full.docx Section 2.3)
-MEMBRANE_TRANSPORT = {
-    # Membrane area
-    'A_m': 10000.0,  # cm² - Physical area from team calc (Eq 31)
-                             # NOTE: P_m scaled down 10× to keep KoA constant
-                             # This maintains current performance while documenting
-                             # the correct physical membrane area for hardware design
-    
-    # Permeability coefficients (cm/min)
-    # From literature: K0 values for polysulfone membrane
-    'P_m_NH3': 0.006,  # cm/min - Scaled for 10× larger A_m (keeps KoA=60) (>0.001 cm/min * 60)
-    'P_m_urea': 0.006,  # cm/min - Scaled for 10× larger A_m (~0.001 cm/min * 60)
-    'P_m_lido': 0.0042,  # cm/min - Scaled for 10× larger A_m (0.0007 cm/min * 60)
-    'P_m_MEGX': 0.0048,  # cm/min - Scaled for 10× larger A_m (0.0008 cm/min * 60)
-}
-
-# Hepatocyte Reaction Kinetics (from Section 3.5)
-HEPATOCYTE_KINETICS = {
-    # NH3 removal rate: 21.7 µg/10⁶ cells/day (porcine hepatocytes)
-    # Convert to µmol/min for 5×10⁸ cells:
-    # 21.7e-6 g/10⁶cells/day × 5×10⁸ cells / (17 g/mol) / (24×60 min/day)
-    'k1_NH3_base': 1.0,       # 1/min - First-order rate constant (base)
-    
-    # Lidocaine: ~80% of urea cycle rate (approximate from CYP450 data)
-    'k1_lido_base': 0.85,      # 1/min - First-order rate constant (base)
-    
-    # Stoichiometry
-    'urea_stoich': 0.5,          # 2 NH3 → 1 urea (factor of 1/2)
-    'MEGX_stoich': 1.0,          # 1:1 lidocaine → MEGX
-}
-
-# Initial Conditions for Compartments
-BIOREACTOR_INITIAL = {
-    # CV1 starts at inlet concentrations
-    'C_NH3_CV1_frac': 1.0,       # Fraction of inlet
-    'C_lido_CV1_frac': 1.0,
-    'C_urea_CV1_frac': 1.0,
-    'C_MEGX_CV1': 0.0,           # µmol/L - Initially zero
-    
-    # CV2 starts at ~50% of inlet (equilibration assumption)
-    'C_NH3_CV2_frac': 0.5,
-    'C_lido_CV2_frac': 0.5,
-    'C_urea_CV2_frac': 1.0,
-    'C_MEGX_CV2': 0.0,
+    'C_GX_CV2': 0.0,             # µmol/L - Initially zero
 }
 

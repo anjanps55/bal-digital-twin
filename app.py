@@ -779,27 +779,60 @@ def render_plots(r):
 
     # ---- Tab 2: Two-Compartment Model ----
     with tab2:
-        fig = make_subplots(rows=1, cols=2, horizontal_spacing=0.12,
-                            subplot_titles=["NH\u2083 — CV1 (Plasma) vs CV2 (Hepatocyte)",
-                                            "Urea — CV1 vs CV2"])
+        fig = make_subplots(rows=2, cols=2, horizontal_spacing=0.12,
+                            vertical_spacing=0.18,
+                            subplot_titles=[
+                                "NH\u2083 — CV1 vs CV2",
+                                "Urea — CV1 vs CV2",
+                                "Lido \u2192 MEGX \u2192 GX (CYP450 Pathway)",
+                                "MEGX & GX Compartment Detail",
+                            ])
         # NH3
-        fig.add_trace(go.Scatter(x=t, y=df["bio_C_NH3_CV1"], name="NH\u2083 CV1 (Plasma)",
+        fig.add_trace(go.Scatter(x=t, y=df["bio_C_NH3_CV1"], name="NH\u2083 CV1",
                                  line=dict(color=NAVY, width=2)), row=1, col=1)
-        fig.add_trace(go.Scatter(x=t, y=df["bio_C_NH3_CV2"], name="NH\u2083 CV2 (Hepatocyte)",
+        fig.add_trace(go.Scatter(x=t, y=df["bio_C_NH3_CV2"], name="NH\u2083 CV2",
                                  line=dict(color=TEAL, width=2, dash="dash")), row=1, col=1)
+        fig.update_yaxes(title_text="\u00b5mol/L", row=1, col=1)
+
         # Urea
         fig.add_trace(go.Scatter(x=t, y=df["bio_C_urea_CV1"], name="Urea CV1",
                                  line=dict(color=NAVY, width=2)), row=1, col=2)
         fig.add_trace(go.Scatter(x=t, y=df["bio_C_urea_CV2"], name="Urea CV2",
                                  line=dict(color=TEAL, width=2, dash="dash")), row=1, col=2)
-        fig.update_xaxes(title_text="Time (min)", row=1, col=1)
-        fig.update_xaxes(title_text="Time (min)", row=1, col=2)
-        fig.update_yaxes(title_text="\u00b5mol/L", row=1, col=1)
         fig.update_yaxes(title_text="mmol/L", row=1, col=2)
-        _fig_layout(fig, title="Two-Compartment Mass Balance (8 Coupled ODEs)")
+
+        # Lido → MEGX → GX pathway (outlet = CV1 values)
+        fig.add_trace(go.Scatter(x=t, y=df["bio_C_lido"], name="Lidocaine (out)",
+                                 line=dict(color=INDIGO, width=2.5)), row=2, col=1)
+        fig.add_trace(go.Scatter(x=t, y=df["bio_C_MEGX_CV1"], name="MEGX (CV1)",
+                                 line=dict(color=AMBER, width=2)), row=2, col=1)
+        fig.add_trace(go.Scatter(x=t, y=df["bio_C_GX_CV1"], name="GX (CV1)",
+                                 line=dict(color=GREEN, width=2, dash="dash")), row=2, col=1)
+        fig.update_yaxes(title_text="\u00b5mol/L", row=2, col=1)
+
+        # MEGX & GX compartment detail
+        fig.add_trace(go.Scatter(x=t, y=df["bio_C_MEGX_CV1"], name="MEGX CV1",
+                                 line=dict(color=AMBER, width=2)), row=2, col=2)
+        fig.add_trace(go.Scatter(x=t, y=df["bio_C_MEGX_CV2"], name="MEGX CV2",
+                                 line=dict(color=AMBER, width=1.5, dash="dot")), row=2, col=2)
+        fig.add_trace(go.Scatter(x=t, y=df["bio_C_GX_CV1"], name="GX CV1",
+                                 line=dict(color=GREEN, width=2)), row=2, col=2)
+        fig.add_trace(go.Scatter(x=t, y=df["bio_C_GX_CV2"], name="GX CV2",
+                                 line=dict(color=GREEN, width=1.5, dash="dot")), row=2, col=2)
+        fig.update_yaxes(title_text="\u00b5mol/L", row=2, col=2)
+
+        for row in (1, 2):
+            for col in (1, 2):
+                fig.update_xaxes(title_text="Time (min)", row=row, col=col)
+
+        _fig_layout(fig, height=650, title="Two-Compartment Mass Balance (10 Coupled ODEs)")
         _show_chart(fig)
-        st.caption("CV1 = Plasma compartment (100 mL) \u2022 CV2 = Hepatocyte compartment (100 mL) \u2022 "
-                   "Membrane area = 10,000 cm\u00b2 \u2022 Diffusive flux = P_m \u00d7 A_m \u00d7 \u0394C")
+        st.caption(
+            "CV1 = Plasma \u2022 CV2 = Hepatocyte \u2022 "
+            "Membrane: polysulfone, P_m \u00d7 A_m \u00d7 \u0394C \u2022 "
+            "**Urea cycle:** 2 NH\u2083 \u2192 1 Urea \u2022 "
+            "**CYP450 pathway:** Lidocaine \u2192 MEGX (N-deethylation) \u2192 GX (N-dealkylation)"
+        )
 
     # ---- Tab 3: System Performance ----
     with tab3:
@@ -1215,9 +1248,10 @@ def render_explainer(r):
         f"- **CV2 (Hepatocyte side, {p['V_CV2']:.0f} mL):** Contains ~5\u00d710\u2078 "
         f"viable hepatocytes (liver cells) that metabolize the toxins. Ammonia is "
         f"converted to urea via the **urea cycle** (2 NH\u2083 \u2192 1 Urea), and "
-        f"lidocaine is converted to MEGX by **CYP450 enzymes** (1 Lido \u2192 1 MEGX). "
-        f"The products diffuse back across the membrane.\n\n"
-        f"This is modeled by **8 coupled ordinary differential equations** (forward "
+        f"lidocaine is metabolized through a two-step **CYP450 pathway**: first "
+        f"N-deethylation to MEGX (1 Lido \u2192 1 MEGX), then N-dealkylation to GX "
+        f"(1 MEGX \u2192 1 GX). All products diffuse back across the membrane.\n\n"
+        f"This is modeled by **10 coupled ordinary differential equations** (forward "
         f"Euler integration, 1-minute time steps) tracking concentrations of NH\u2083, "
         f"urea, lidocaine, and MEGX in both compartments simultaneously."
     )
