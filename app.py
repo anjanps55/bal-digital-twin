@@ -1,0 +1,1185 @@
+"""
+BAL Digital Twin — Streamlit Dashboard
+Interactive simulation and monitoring for the Bioartificial Liver Support Device.
+"""
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent))
+
+import copy
+import json
+
+import numpy as np
+import pandas as pd
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import streamlit as st
+import streamlit.components.v1 as components
+
+from simulation.engine import SimulationEngine
+from adaptive_controller import AdaptiveBALController
+import config.constants as constants
+
+# ---------------------------------------------------------------------------
+# Page config (must be first Streamlit call)
+# ---------------------------------------------------------------------------
+st.set_page_config(
+    page_title="BAL Digital Twin",
+    page_icon="\U0001fac0",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# ---------------------------------------------------------------------------
+# Theme / CSS
+# ---------------------------------------------------------------------------
+NAVY = "#1e3a5f"
+INDIGO = "#6366f1"
+TEAL = "#0d9488"
+GREEN = "#10b981"
+AMBER = "#f59e0b"
+RED = "#ef4444"
+BG = "#f0f4f8"
+CARD = "#ffffff"
+GRAY = "#6b7280"
+
+def inject_css():
+    st.markdown(
+        f"""
+        <style>
+        /* page background */
+        .stApp {{background-color: {BG};}}
+
+        /* metric cards */
+        [data-testid="stMetric"] {{
+            background: {CARD};
+            border-radius: 8px;
+            padding: 12px 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }}
+        [data-testid="stMetricValue"] {{font-size: 1.5rem !important;}}
+
+        /* sidebar */
+        section[data-testid="stSidebar"] {{background: #e8eef4;}}
+        section[data-testid="stSidebar"] h1,
+        section[data-testid="stSidebar"] h2,
+        section[data-testid="stSidebar"] h3 {{color: {NAVY};}}
+
+        /* tab labels */
+        .stTabs [data-baseweb="tab"] {{color: {NAVY}; font-weight: 600;}}
+
+        /* hide streamlit footer */
+        footer {{visibility: hidden;}}
+
+        /* pipeline card */
+        .mod-card {{
+            border-radius: 6px;
+            padding: 10px 6px;
+            text-align: center;
+            min-height: 80px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }}
+        .mod-name {{font-size: 0.7rem; color: {GRAY}; text-transform: uppercase; letter-spacing: 0.5px;}}
+        .mod-state {{font-size: 0.8rem; font-weight: 600; margin-top: 4px;}}
+
+        /* flow arrow */
+        .flow-arrow {{
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.4rem; color: {GRAY}; padding-top: 18px;
+        }}
+
+        /* sidebar config buttons */
+        .cfg-btn {{
+            display: flex; align-items: center; gap: 10px;
+            background: {CARD}; border: 1px solid #d1d5db; border-radius: 8px;
+            padding: 10px 14px; margin-bottom: 6px; cursor: pointer;
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }}
+        .cfg-btn:hover {{border-color: {NAVY}; box-shadow: 0 0 0 1px {NAVY};}}
+        .cfg-icon {{font-size: 1.3rem; line-height: 1;}}
+        .cfg-body {{flex: 1; min-width: 0;}}
+        .cfg-title {{font-size: 0.82rem; font-weight: 600; color: {NAVY};}}
+        .cfg-sub {{font-size: 0.72rem; color: {GRAY}; line-height: 1.3; margin-top: 1px;
+                   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}}
+        .cfg-arrow {{color: #d1d5db; font-size: 0.9rem;}}
+
+        /* Make edit-config buttons compact & link-like in sidebar */
+        section[data-testid="stSidebar"] button[kind="secondary"] {{
+            font-size: 0.75rem !important;
+            padding: 4px 0 !important;
+            height: auto !important;
+            min-height: 0 !important;
+            color: {NAVY} !important;
+            border: none !important;
+            background: transparent !important;
+            box-shadow: none !important;
+            text-decoration: underline !important;
+            text-underline-offset: 2px !important;
+        }}
+        section[data-testid="stSidebar"] button[kind="secondary"]:hover {{
+            color: {INDIGO} !important;
+            background: transparent !important;
+        }}
+
+        /* Keep primary button prominent */
+        section[data-testid="stSidebar"] button[kind="primary"] {{
+            margin-top: 4px;
+            font-weight: 600 !important;
+            font-size: 0.95rem !important;
+            padding: 10px 0 !important;
+            border-radius: 8px !important;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Presets
+# ---------------------------------------------------------------------------
+PRESETS = {
+    "Standard Adult": {
+        "NH3": 90.0, "lido": 21.0, "urea": 5.0,
+        "Q_blood": 150.0, "Hct": 0.32, "Q_target": 30.0, "duration": 60,
+    },
+    "Severe Case": {
+        "NH3": 200.0, "lido": 35.0, "urea": 3.0,
+        "Q_blood": 150.0, "Hct": 0.30, "Q_target": 40.0, "duration": 120,
+    },
+    "Pediatric Patient": {
+        "NH3": 110.0, "lido": 25.0, "urea": 4.0,
+        "Q_blood": 75.0, "Hct": 0.35, "Q_target": 20.0, "duration": 90,
+    },
+    "Mild Case": {
+        "NH3": 60.0, "lido": 15.0, "urea": 6.0,
+        "Q_blood": 150.0, "Hct": 0.34, "Q_target": 25.0, "duration": 45,
+    },
+    "Custom": {
+        "NH3": 90.0, "lido": 21.0, "urea": 5.0,
+        "Q_blood": 150.0, "Hct": 0.32, "Q_target": 30.0, "duration": 60,
+    },
+}
+
+
+# ---------------------------------------------------------------------------
+# Session-state defaults for dialogs
+# ---------------------------------------------------------------------------
+_PATIENT_DEFAULTS = {
+    "NH3": 90.0, "lido": 21.0, "urea": 5.0,
+    "Q_blood": 150.0, "Hct": 0.32,
+}
+
+_BIO_DEFAULTS = {
+    "V_CV1": 100.0, "V_CV2": 100.0, "A_m": 10000.0,
+    "P_m_NH3": 0.006, "P_m_urea": 0.006, "P_m_lido": 0.0042, "P_m_MEGX": 0.0048,
+    "k1_NH3": 1.0, "k1_lido": 0.85, "k_decay": 0.0001,
+}
+
+
+def _init_defaults():
+    """Seed session state on first load."""
+    for k, v in _PATIENT_DEFAULTS.items():
+        if f"_pt_{k}" not in st.session_state:
+            st.session_state[f"_pt_{k}"] = v
+    for k, v in _BIO_DEFAULTS.items():
+        if f"_bio_{k}" not in st.session_state:
+            st.session_state[f"_bio_{k}"] = v
+
+
+# ---------------------------------------------------------------------------
+# Patient Condition dialog
+# ---------------------------------------------------------------------------
+@st.dialog("Patient Condition", width="large")
+def _patient_dialog():
+    st.markdown(
+        f"<p style='color:{GRAY};margin-top:-8px'>"
+        "Set inlet toxin concentrations and blood parameters for the patient.</p>",
+        unsafe_allow_html=True,
+    )
+
+    # --- Toxin levels ---
+    st.markdown("#### Toxin Concentrations")
+    tc1, tc2, tc3 = st.columns(3)
+    with tc1:
+        nh3 = st.number_input(
+            "NH\u2083 (\u00b5mol/L)", 20.0, 500.0,
+            value=st.session_state["_pt_NH3"], step=5.0,
+            help="Normal < 35 \u00b5mol/L")
+    with tc2:
+        lido = st.number_input(
+            "Lidocaine (\u00b5mol/L)", 5.0, 100.0,
+            value=st.session_state["_pt_lido"], step=1.0,
+            help="Normal < 10 \u00b5mol/L")
+    with tc3:
+        urea = st.number_input(
+            "Urea (mmol/L)", 1.0, 30.0,
+            value=st.session_state["_pt_urea"], step=0.5)
+
+    # severity badge
+    if nh3 >= 150:
+        sev, sev_c = "CRITICAL", RED
+    elif nh3 >= 80:
+        sev, sev_c = "SEVERE", AMBER
+    elif nh3 >= 35:
+        sev, sev_c = "ELEVATED", "#d97706"
+    else:
+        sev, sev_c = "NORMAL", GREEN
+    st.markdown(
+        f"<div style='display:inline-block;background:{sev_c}18;color:{sev_c};"
+        f"font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:10px;"
+        f"border:1px solid {sev_c}40;margin-top:2px'>NH\u2083 severity: {sev}</div>",
+        unsafe_allow_html=True,
+    )
+
+    # --- Blood parameters ---
+    st.markdown("#### Blood Parameters")
+    bc1, bc2 = st.columns(2)
+    with bc1:
+        q_blood = st.number_input(
+            "Blood Flow (mL/min)", 50.0, 300.0,
+            value=st.session_state["_pt_Q_blood"], step=5.0)
+    with bc2:
+        hct = st.number_input(
+            "Hematocrit", 0.15, 0.65,
+            value=st.session_state["_pt_Hct"], step=0.01, format="%.2f")
+
+    # --- Action buttons ---
+    st.markdown("")
+    _, b2, b3 = st.columns([2, 1, 1])
+    with b2:
+        if st.button("Reset Defaults", key="_pt_reset", use_container_width=True):
+            for k, v in _PATIENT_DEFAULTS.items():
+                st.session_state[f"_pt_{k}"] = v
+            st.rerun()
+    with b3:
+        if st.button("Apply", type="primary", key="_pt_apply", use_container_width=True):
+            st.session_state["_pt_NH3"] = nh3
+            st.session_state["_pt_lido"] = lido
+            st.session_state["_pt_urea"] = urea
+            st.session_state["_pt_Q_blood"] = q_blood
+            st.session_state["_pt_Hct"] = hct
+            st.rerun()
+
+
+# ---------------------------------------------------------------------------
+# Bioreactor Configuration dialog
+# ---------------------------------------------------------------------------
+@st.dialog("Bioreactor Configuration", width="large")
+def _bioreactor_dialog():
+    st.markdown(
+        f"<p style='color:{GRAY};margin-top:-8px'>Adjust the two-compartment bioreactor "
+        "geometry, membrane transport, and hepatocyte kinetics.</p>",
+        unsafe_allow_html=True,
+    )
+
+    # --- Geometry ---
+    st.markdown("#### Reactor Geometry")
+    gc1, gc2, gc3 = st.columns(3)
+    with gc1:
+        v1 = st.number_input("CV1 \u2014 Plasma (mL)", 10.0, 500.0,
+                              value=st.session_state["_bio_V_CV1"], step=10.0)
+    with gc2:
+        v2 = st.number_input("CV2 \u2014 Hepatocyte (mL)", 10.0, 500.0,
+                              value=st.session_state["_bio_V_CV2"], step=10.0)
+    with gc3:
+        am = st.number_input("Membrane Area (cm\u00b2)", 100.0, 50000.0,
+                              value=st.session_state["_bio_A_m"], step=500.0,
+                              help="Polysulfone hollow-fiber surface area")
+
+    # --- Membrane permeabilities ---
+    st.markdown("#### Membrane Permeability")
+    mc1, mc2, mc3, mc4 = st.columns(4)
+    with mc1:
+        pm_nh3 = st.number_input("P_m NH\u2083", 0.0001, 0.1,
+                                  value=st.session_state["_bio_P_m_NH3"],
+                                  step=0.001, format="%.4f")
+    with mc2:
+        pm_urea = st.number_input("P_m Urea", 0.0001, 0.1,
+                                   value=st.session_state["_bio_P_m_urea"],
+                                   step=0.001, format="%.4f")
+    with mc3:
+        pm_lido = st.number_input("P_m Lido", 0.0001, 0.1,
+                                   value=st.session_state["_bio_P_m_lido"],
+                                   step=0.001, format="%.4f")
+    with mc4:
+        pm_megx = st.number_input("P_m MEGX", 0.0001, 0.1,
+                                   value=st.session_state["_bio_P_m_MEGX"],
+                                   step=0.001, format="%.4f")
+    st.caption("All permeabilities in cm/min.  Flux = P_m \u00d7 A_m \u00d7 \u0394C")
+
+    # --- Kinetics ---
+    st.markdown("#### Hepatocyte Kinetics")
+    kc1, kc2, kc3 = st.columns(3)
+    with kc1:
+        k_nh3 = st.number_input("k\u2081 NH\u2083 (/min)", 0.01, 5.0,
+                                 value=st.session_state["_bio_k1_NH3"], step=0.05,
+                                 help="First-order ammonia removal rate")
+    with kc2:
+        k_lido = st.number_input("k\u2081 Lido (/min)", 0.01, 5.0,
+                                  value=st.session_state["_bio_k1_lido"], step=0.05,
+                                  help="CYP450 lidocaine metabolism rate")
+    with kc3:
+        k_dec = st.number_input("k_decay (/min)", 0.0, 0.01,
+                                 value=st.session_state["_bio_k_decay"],
+                                 step=0.0001, format="%.4f",
+                                 help="Hepatocyte viability decay rate")
+
+    # --- KoA preview ---
+    koa_nh3 = pm_nh3 * am
+    koa_lido = pm_lido * am
+    st.markdown(
+        f"<div style='background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;"
+        f"padding:10px 14px;margin-top:4px;font-size:0.85rem;color:{GRAY}'>"
+        f"<strong>Derived:</strong> &nbsp; "
+        f"KoA<sub>NH\u2083</sub> = {koa_nh3:,.0f} cm\u00b3/min &nbsp;\u2022&nbsp; "
+        f"KoA<sub>Lido</sub> = {koa_lido:,.0f} cm\u00b3/min &nbsp;\u2022&nbsp; "
+        f"Total reactor vol = {v1 + v2:,.0f} mL"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+    # --- Action buttons ---
+    st.markdown("")
+    _, b2, b3 = st.columns([2, 1, 1])
+    with b2:
+        if st.button("Reset Defaults", key="_bio_reset", use_container_width=True):
+            for k, v in _BIO_DEFAULTS.items():
+                st.session_state[f"_bio_{k}"] = v
+            st.rerun()
+    with b3:
+        if st.button("Apply", type="primary", key="_bio_apply", use_container_width=True):
+            st.session_state["_bio_V_CV1"] = v1
+            st.session_state["_bio_V_CV2"] = v2
+            st.session_state["_bio_A_m"] = am
+            st.session_state["_bio_P_m_NH3"] = pm_nh3
+            st.session_state["_bio_P_m_urea"] = pm_urea
+            st.session_state["_bio_P_m_lido"] = pm_lido
+            st.session_state["_bio_P_m_MEGX"] = pm_megx
+            st.session_state["_bio_k1_NH3"] = k_nh3
+            st.session_state["_bio_k1_lido"] = k_lido
+            st.session_state["_bio_k_decay"] = k_dec
+            st.rerun()
+
+
+# ---------------------------------------------------------------------------
+# Sidebar
+# ---------------------------------------------------------------------------
+def render_sidebar():
+    _init_defaults()
+
+    with st.sidebar:
+        st.markdown(
+            f"<h2 style='color:{NAVY};margin-bottom:0'>Simulation Setup</h2>",
+            unsafe_allow_html=True)
+        st.caption("Select a preset, then fine-tune via the config panels.")
+
+        # ---- Preset selector ----
+        def _on_preset():
+            p = PRESETS[st.session_state._preset]
+            # push patient-level values
+            for k in ("NH3", "lido", "urea", "Q_blood", "Hct"):
+                if k in p:
+                    st.session_state[f"_pt_{k}"] = p[k]
+            # push treatment-level values
+            for k in ("Q_target", "duration"):
+                if k in p:
+                    st.session_state[f"_s_{k}"] = p[k]
+
+        st.selectbox("Patient Preset", list(PRESETS.keys()),
+                      key="_preset", on_change=_on_preset)
+
+        st.markdown("---")
+
+        # ---- Patient Condition card ----
+        _nh3 = st.session_state["_pt_NH3"]
+        _lido = st.session_state["_pt_lido"]
+        _hct = st.session_state["_pt_Hct"]
+        _qb = st.session_state["_pt_Q_blood"]
+        st.markdown(
+            f'<div class="cfg-btn">'
+            f'<div class="cfg-icon">\U0001fa78</div>'
+            f'<div class="cfg-body">'
+            f'<div class="cfg-title">Patient Condition</div>'
+            f'<div class="cfg-sub">NH\u2083 {_nh3:.0f} \u00b7 Lido {_lido:.0f} \u00b7 '
+            f'Hct {_hct:.2f} \u00b7 Q {_qb:.0f}</div>'
+            f'</div>'
+            f'<div class="cfg-arrow">\u203a</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+        if st.button("Edit Patient Condition", key="_open_pt", use_container_width=True):
+            _patient_dialog()
+
+        # ---- Bioreactor Sizing card ----
+        _v1 = st.session_state["_bio_V_CV1"]
+        _v2 = st.session_state["_bio_V_CV2"]
+        _am = st.session_state["_bio_A_m"]
+        _k1 = st.session_state["_bio_k1_NH3"]
+        st.markdown(
+            f'<div class="cfg-btn">'
+            f'<div class="cfg-icon">\u2699\ufe0f</div>'
+            f'<div class="cfg-body">'
+            f'<div class="cfg-title">Bioreactor Config</div>'
+            f'<div class="cfg-sub">CV1 {_v1:.0f} \u00b7 CV2 {_v2:.0f} \u00b7 '
+            f'A_m {_am:,.0f} cm\u00b2 \u00b7 k\u2081 {_k1}</div>'
+            f'</div>'
+            f'<div class="cfg-arrow">\u203a</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+        if st.button("Edit Bioreactor Config", key="_open_bio", use_container_width=True):
+            _bioreactor_dialog()
+
+        st.markdown("---")
+
+        # ---- Treatment settings (always visible — just 2 sliders) ----
+        st.markdown(f"**Treatment Settings**")
+        # init from preset if needed
+        for k, v in [("Q_target", 30.0), ("duration", 60)]:
+            if f"_s_{k}" not in st.session_state:
+                st.session_state[f"_s_{k}"] = v
+
+        q_target = st.slider("Plasma Flow Target (mL/min)", 10.0, 100.0,
+                              key="_s_Q_target", step=5.0)
+        duration = st.slider("Duration (min)", 10, 360,
+                              key="_s_duration", step=5)
+
+        st.markdown("---")
+        adaptive = st.toggle("Adaptive Control", value=False,
+                             help="Auto-optimize parameters based on severity assessment.")
+
+        run_clicked = st.button("Run Simulation", type="primary", use_container_width=True)
+
+    # Assemble params from session state
+    params = {
+        # Patient condition
+        "NH3": st.session_state["_pt_NH3"],
+        "lido": st.session_state["_pt_lido"],
+        "urea": st.session_state["_pt_urea"],
+        "Q_blood": st.session_state["_pt_Q_blood"],
+        "Hct": st.session_state["_pt_Hct"],
+        # Treatment
+        "Q_target": q_target,
+        "duration": duration,
+        # Bioreactor sizing
+        "V_CV1": st.session_state["_bio_V_CV1"],
+        "V_CV2": st.session_state["_bio_V_CV2"],
+        "A_m": st.session_state["_bio_A_m"],
+        "P_m_NH3": st.session_state["_bio_P_m_NH3"],
+        "P_m_urea": st.session_state["_bio_P_m_urea"],
+        "P_m_lido": st.session_state["_bio_P_m_lido"],
+        "P_m_MEGX": st.session_state["_bio_P_m_MEGX"],
+        "k1_NH3": st.session_state["_bio_k1_NH3"],
+        "k1_lido": st.session_state["_bio_k1_lido"],
+        "k_decay": st.session_state["_bio_k_decay"],
+    }
+    return params, adaptive, run_clicked
+
+
+# ---------------------------------------------------------------------------
+# Simulation runner
+# ---------------------------------------------------------------------------
+def run_simulation(params, adaptive):
+    """Run simulation with safe constant mutation."""
+
+    # Save originals
+    orig_sep = copy.deepcopy(constants.SEPARATOR_INPUTS)
+    orig_pump = copy.deepcopy(constants.PUMP_THRESHOLDS)
+    orig_kin = copy.deepcopy(constants.HEPATOCYTE_KINETICS)
+    orig_vol = copy.deepcopy(constants.BIOREACTOR_VOLUMES)
+    orig_mem = copy.deepcopy(constants.MEMBRANE_TRANSPORT)
+    orig_bio_thresh = copy.deepcopy(constants.BIOREACTOR_THRESHOLDS)
+
+    severity = None
+    adjustments = None
+    duration = params["duration"]
+
+    try:
+        # Apply patient parameters
+        constants.SEPARATOR_INPUTS["C_NH3_in_nominal"] = params["NH3"]
+        constants.SEPARATOR_INPUTS["C_lido_in_nominal"] = params["lido"]
+        constants.SEPARATOR_INPUTS["C_urea_in_nominal"] = params["urea"]
+        constants.SEPARATOR_INPUTS["Q_blood_nominal"] = params["Q_blood"]
+        constants.SEPARATOR_INPUTS["Hct_in_nominal"] = params["Hct"]
+        constants.PUMP_THRESHOLDS["Q_target"] = params["Q_target"]
+
+        # Apply bioreactor sizing
+        constants.BIOREACTOR_VOLUMES["V_CV1"] = params["V_CV1"]
+        constants.BIOREACTOR_VOLUMES["V_CV2"] = params["V_CV2"]
+        constants.MEMBRANE_TRANSPORT["A_m"] = params["A_m"]
+        constants.MEMBRANE_TRANSPORT["P_m_NH3"] = params["P_m_NH3"]
+        constants.MEMBRANE_TRANSPORT["P_m_urea"] = params["P_m_urea"]
+        constants.MEMBRANE_TRANSPORT["P_m_lido"] = params["P_m_lido"]
+        constants.MEMBRANE_TRANSPORT["P_m_MEGX"] = params["P_m_MEGX"]
+        constants.HEPATOCYTE_KINETICS["k1_NH3_base"] = params["k1_NH3"]
+        constants.HEPATOCYTE_KINETICS["k1_lido_base"] = params["k1_lido"]
+        constants.BIOREACTOR_THRESHOLDS["k_cell_decay"] = params["k_decay"]
+
+        if adaptive:
+            ctrl = AdaptiveBALController()
+            severity = ctrl.assess_severity(params["NH3"], params["lido"])
+            adjustments = ctrl.calculate_adjustments(severity, params["NH3"], params["lido"])
+            duration = ctrl.apply_adjustments(adjustments)
+
+        sim = SimulationEngine(dt=1.0)
+        steps = int(duration / sim.dt)
+        for _ in range(steps):
+            sim.step()
+
+        # Build dataframe
+        records = []
+        for h in sim.history:
+            row = {"time": h["time"]}
+            for mod_key in ("separator", "pump", "bioreactor", "sampler", "mixer", "return_monitor"):
+                prefix = {
+                    "separator": "sep", "pump": "pump", "bioreactor": "bio",
+                    "sampler": "samp", "mixer": "mix", "return_monitor": "mon",
+                }[mod_key]
+                for k, v in h[mod_key].items():
+                    if isinstance(v, (int, float, bool, np.integer, np.floating)):
+                        row[f"{prefix}_{k}"] = v
+            records.append(row)
+        df = pd.DataFrame(records)
+
+        result = {
+            "df": df,
+            "final": sim.history[-1],
+            "module_states": sim.get_module_states(),
+            "params": params,
+            "severity": severity,
+            "adjustments": adjustments,
+            "duration": duration,
+        }
+        return result
+
+    finally:
+        # Restore constants
+        constants.SEPARATOR_INPUTS.update(orig_sep)
+        constants.PUMP_THRESHOLDS.update(orig_pump)
+        constants.HEPATOCYTE_KINETICS.update(orig_kin)
+        constants.BIOREACTOR_VOLUMES.update(orig_vol)
+        constants.MEMBRANE_TRANSPORT.update(orig_mem)
+        constants.BIOREACTOR_THRESHOLDS.update(orig_bio_thresh)
+
+
+# ---------------------------------------------------------------------------
+# Metrics row
+# ---------------------------------------------------------------------------
+def render_metrics(r):
+    bio = r["final"]["bioreactor"]
+    mon = r["final"]["return_monitor"]
+    p = r["params"]
+
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        st.metric("Final NH\u2083", f"{bio['C_NH3']:.1f} \u00b5mol/L",
+                   f"{bio['C_NH3'] - p['NH3']:.1f}", delta_color="inverse")
+    with c2:
+        st.metric("Final Lidocaine", f"{bio['C_lido']:.1f} \u00b5mol/L",
+                   f"{bio['C_lido'] - p['lido']:.1f}", delta_color="inverse")
+    with c3:
+        st.metric("Cell Viability", f"{bio['cell_viability']*100:.1f}%")
+    with c4:
+        if mon["treatment_success"]:
+            st.success("TREATMENT SUCCESSFUL", icon="\u2705")
+        else:
+            st.error("TREATMENT INCOMPLETE", icon="\u26a0\ufe0f")
+
+    # Secondary row
+    c5, c6, c7, c8 = st.columns(4)
+    with c5:
+        st.metric("NH\u2083 Clearance", f"{bio['NH3_clearance']*100:.1f}%")
+    with c6:
+        st.metric("Lido Clearance", f"{bio['lido_clearance']*100:.1f}%")
+    with c7:
+        approved = mon["return_approved"]
+        st.metric("Return Approved", "Yes" if approved else "No")
+    with c8:
+        st.metric("Violations", mon["violation_count"])
+
+
+# ---------------------------------------------------------------------------
+# Plotly helpers
+# ---------------------------------------------------------------------------
+_PLOTLY_LAYOUT = dict(
+    template="plotly_white",
+    height=460,
+    margin=dict(l=60, r=30, t=60, b=55),
+    font=dict(size=12, family="Inter, system-ui, sans-serif"),
+    legend=dict(
+        orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5,
+        bgcolor="rgba(255,255,255,0.8)", bordercolor="#e2e8f0", borderwidth=1,
+        font=dict(size=11),
+    ),
+    title=dict(font=dict(size=15, color=NAVY), x=0.5, xanchor="center"),
+)
+
+# Plotly modebar config: show PNG download, hide logo
+_PLOTLY_CONFIG = dict(
+    displayModeBar=True,
+    displaylogo=False,
+    toImageButtonOptions=dict(format="png", filename="bal_chart", scale=2),
+    modeBarButtonsToAdd=["toImage"],
+    modeBarButtonsToRemove=["lasso2d", "select2d"],
+)
+
+def _fig_layout(fig, **kw):
+    merged = {**_PLOTLY_LAYOUT, **kw}
+    # For subplots: push legend further down and increase bottom margin
+    has_subplots = getattr(fig, "_grid_ref", None) is not None
+    if has_subplots:
+        leg = {**_PLOTLY_LAYOUT["legend"], **merged.get("legend", {})}
+        leg["y"] = -0.22
+        merged["legend"] = leg
+        m = dict(**merged.get("margin", _PLOTLY_LAYOUT["margin"]))
+        m["b"] = max(m.get("b", 55), 90)
+        m["t"] = max(m.get("t", 60), 70)
+        merged["margin"] = m
+    fig.update_layout(merged)
+    # Style subplot titles
+    for ann in fig.layout.annotations:
+        ann.font = dict(size=12, color=NAVY)
+    return fig
+
+def _show_chart(fig):
+    """Render a plotly chart with PNG export enabled."""
+    st.plotly_chart(fig, use_container_width=True, config=_PLOTLY_CONFIG)
+
+
+# ---------------------------------------------------------------------------
+# Tabs
+# ---------------------------------------------------------------------------
+def render_plots(r):
+    df = r["df"]
+    t = df["time"]
+
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "Toxin Clearance",
+        "Two-Compartment Model",
+        "System Performance",
+        "Flow & Pressure",
+        "Efficiency Analysis",
+    ])
+
+    # ---- Tab 1: Toxin Clearance ----
+    with tab1:
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=t, y=df["bio_C_NH3"], name="NH\u2083",
+                                 line=dict(color=NAVY, width=2.5)))
+        fig.add_trace(go.Scatter(x=t, y=df["bio_C_lido"], name="Lidocaine",
+                                 line=dict(color=INDIGO, width=2.5)))
+        fig.add_hline(y=50, line_dash="dash", line_color=RED, line_width=1,
+                      annotation_text="NH\u2083 safe limit (50)",
+                      annotation_position="top left",
+                      annotation_font_size=10, annotation_font_color=RED)
+        fig.add_hline(y=10, line_dash="dot", line_color=AMBER, line_width=1,
+                      annotation_text="Lido safe limit (10)",
+                      annotation_position="bottom left",
+                      annotation_font_size=10, annotation_font_color=AMBER)
+        _fig_layout(fig, xaxis_title="Time (min)",
+                    yaxis_title="Concentration (\u00b5mol/L)",
+                    title="Toxin Clearance Over Treatment Duration")
+        _show_chart(fig)
+
+    # ---- Tab 2: Two-Compartment Model ----
+    with tab2:
+        fig = make_subplots(rows=1, cols=2, horizontal_spacing=0.12,
+                            subplot_titles=["NH\u2083 — CV1 (Plasma) vs CV2 (Hepatocyte)",
+                                            "Urea — CV1 vs CV2"])
+        # NH3
+        fig.add_trace(go.Scatter(x=t, y=df["bio_C_NH3_CV1"], name="NH\u2083 CV1 (Plasma)",
+                                 line=dict(color=NAVY, width=2)), row=1, col=1)
+        fig.add_trace(go.Scatter(x=t, y=df["bio_C_NH3_CV2"], name="NH\u2083 CV2 (Hepatocyte)",
+                                 line=dict(color=TEAL, width=2, dash="dash")), row=1, col=1)
+        # Urea
+        fig.add_trace(go.Scatter(x=t, y=df["bio_C_urea_CV1"], name="Urea CV1",
+                                 line=dict(color=NAVY, width=2)), row=1, col=2)
+        fig.add_trace(go.Scatter(x=t, y=df["bio_C_urea_CV2"], name="Urea CV2",
+                                 line=dict(color=TEAL, width=2, dash="dash")), row=1, col=2)
+        fig.update_xaxes(title_text="Time (min)", row=1, col=1)
+        fig.update_xaxes(title_text="Time (min)", row=1, col=2)
+        fig.update_yaxes(title_text="\u00b5mol/L", row=1, col=1)
+        fig.update_yaxes(title_text="mmol/L", row=1, col=2)
+        _fig_layout(fig, title="Two-Compartment Mass Balance (8 Coupled ODEs)")
+        _show_chart(fig)
+        st.caption("CV1 = Plasma compartment (100 mL) \u2022 CV2 = Hepatocyte compartment (100 mL) \u2022 "
+                   "Membrane area = 10,000 cm\u00b2 \u2022 Diffusive flux = P_m \u00d7 A_m \u00d7 \u0394C")
+
+    # ---- Tab 3: System Performance ----
+    with tab3:
+        fig = make_subplots(rows=1, cols=2, horizontal_spacing=0.12,
+                            subplot_titles=["Cell Viability", "Clearance Rates"])
+        # Viability
+        fig.add_trace(go.Scatter(x=t, y=df["bio_cell_viability"] * 100,
+                                 name="Viability", line=dict(color=GREEN, width=2.5)),
+                      row=1, col=1)
+        fig.add_hline(y=80, line_dash="dash", line_color=AMBER, line_width=1,
+                      annotation_text="Normal (80%)", annotation_position="bottom left",
+                      annotation_font_size=9, annotation_font_color=AMBER,
+                      row=1, col=1)
+        fig.add_hline(y=60, line_dash="dot", line_color=RED, line_width=1,
+                      annotation_text="Degraded (60%)", annotation_position="bottom left",
+                      annotation_font_size=9, annotation_font_color=RED,
+                      row=1, col=1)
+        fig.update_yaxes(title_text="Viability (%)", row=1, col=1)
+
+        # Clearance
+        fig.add_trace(go.Scatter(x=t, y=df["bio_NH3_clearance"] * 100,
+                                 name="NH\u2083 Clearance", line=dict(color=NAVY, width=2)),
+                      row=1, col=2)
+        fig.add_trace(go.Scatter(x=t, y=df["bio_lido_clearance"] * 100,
+                                 name="Lido Clearance", line=dict(color=INDIGO, width=2, dash="dash")),
+                      row=1, col=2)
+        fig.update_yaxes(title_text="Clearance (%)", row=1, col=2)
+        fig.update_xaxes(title_text="Time (min)", row=1, col=1)
+        fig.update_xaxes(title_text="Time (min)", row=1, col=2)
+        _fig_layout(fig, title="Bioreactor Performance Metrics")
+        _show_chart(fig)
+
+    # ---- Tab 4: Flow & Pressure ----
+    with tab4:
+        fig = make_subplots(rows=2, cols=2, horizontal_spacing=0.12,
+                            vertical_spacing=0.18,
+                            subplot_titles=["Separator Flows", "Pump Output Pressure",
+                                            "Mixer Output", "Hematocrit"])
+        # Separator flows
+        fig.add_trace(go.Scatter(x=t, y=df["sep_Q_plasma"], name="Q_plasma",
+                                 line=dict(color=NAVY, width=2)), row=1, col=1)
+        fig.add_trace(go.Scatter(x=t, y=df["sep_Q_cells"], name="Q_cells",
+                                 line=dict(color=TEAL, width=2)), row=1, col=1)
+        fig.update_yaxes(title_text="mL/min", row=1, col=1)
+
+        # Pump pressure
+        fig.add_trace(go.Scatter(x=t, y=df["pump_P_plasma"], name="P_pump_out",
+                                 line=dict(color=INDIGO, width=2)), row=1, col=2)
+        fig.update_yaxes(title_text="mmHg", row=1, col=2)
+
+        # Mixer output flow
+        fig.add_trace(go.Scatter(x=t, y=df["mix_Q_blood"], name="Q_blood out",
+                                 line=dict(color=NAVY, width=2)), row=2, col=1)
+        fig.update_yaxes(title_text="mL/min", row=2, col=1)
+
+        # Hematocrit
+        fig.add_trace(go.Scatter(x=t, y=df["mix_Hct_out"], name="Hct_out",
+                                 line=dict(color=GREEN, width=2)), row=2, col=2)
+        fig.add_hline(y=0.32, line_dash="dash", line_color=GRAY, line_width=1,
+                      annotation_text="Target (0.32)", annotation_position="bottom left",
+                      annotation_font_size=9, annotation_font_color=GRAY,
+                      row=2, col=2)
+        fig.update_yaxes(title_text="Fraction", row=2, col=2)
+
+        for row in (1, 2):
+            for col in (1, 2):
+                fig.update_xaxes(title_text="Time (min)", row=row, col=col)
+
+        _fig_layout(fig, height=650, title="Hydraulic Parameters Across the Circuit")
+        _show_chart(fig)
+
+    # ---- Tab 5: Efficiency Analysis ----
+    with tab5:
+        # Compute derived efficiency metrics
+        inlet_nh3 = r["params"]["NH3"]
+        inlet_lido = r["params"]["lido"]
+
+        # 1. Overall Treatment Efficiency (weighted average of clearances)
+        nh3_cl = df["bio_NH3_clearance"] * 100
+        lido_cl = df["bio_lido_clearance"] * 100
+        # Weight NH3 heavier (clinical priority) — 60/40 split
+        overall_eff = 0.6 * nh3_cl + 0.4 * lido_cl
+
+        # 2. Membrane Transfer Efficiency
+        #    = (C_CV1 - C_CV2) / C_CV1 — how well the membrane maintains the
+        #    concentration gradient needed for hepatocyte metabolism.
+        #    High = membrane keeping up (CV2 << CV1), Low = membrane bottleneck
+        cv1_nh3 = df["bio_C_NH3_CV1"]
+        cv2_nh3 = df["bio_C_NH3_CV2"]
+        mem_eff_nh3 = ((cv1_nh3 - cv2_nh3) / cv1_nh3.clip(lower=0.01)) * 100
+        mem_eff_nh3 = mem_eff_nh3.clip(0, 100)
+
+        cv1_urea = df["bio_C_urea_CV1"]
+        cv2_urea = df["bio_C_urea_CV2"]
+        # For urea, gradient is CV2→CV1 (produced in CV2, diffuses out)
+        mem_eff_urea = ((cv2_urea - cv1_urea) / cv2_urea.clip(lower=0.01)) * 100
+        mem_eff_urea = mem_eff_urea.clip(0, 100)
+
+        # 3. Bioreactor Utilization
+        #    = (viability × C_CV2) / C_CV2_initial — fraction of max metabolic
+        #    capacity being used. Drops as both viability decays AND substrate
+        #    is depleted (less toxin left to metabolize).
+        cv2_nh3_initial = cv2_nh3.iloc[0] if cv2_nh3.iloc[0] > 0 else 1.0
+        utilization_nh3 = (df["bio_cell_viability"] * cv2_nh3 / cv2_nh3_initial) * 100
+        utilization_nh3 = utilization_nh3.clip(0, 100)
+
+        fig = make_subplots(
+            rows=2, cols=2,
+            horizontal_spacing=0.12,
+            vertical_spacing=0.18,
+            subplot_titles=[
+                "Overall Treatment Efficiency",
+                "Membrane Transfer Efficiency",
+                "Bioreactor Utilization",
+                "Removal Rate (instantaneous)",
+            ],
+        )
+
+        # Plot 1: Overall efficiency
+        fig.add_trace(go.Scatter(
+            x=t, y=overall_eff, name="Overall Efficiency",
+            line=dict(color=NAVY, width=2.5),
+            fill="tozeroy", fillcolor="rgba(30,58,95,0.1)",
+        ), row=1, col=1)
+        fig.add_trace(go.Scatter(
+            x=t, y=nh3_cl, name="NH\u2083 Clearance",
+            line=dict(color=RED, width=1.5, dash="dot"),
+        ), row=1, col=1)
+        fig.add_trace(go.Scatter(
+            x=t, y=lido_cl, name="Lido Clearance",
+            line=dict(color=INDIGO, width=1.5, dash="dot"),
+        ), row=1, col=1)
+        fig.update_yaxes(title_text="%", row=1, col=1)
+
+        # Plot 2: Membrane transfer efficiency
+        fig.add_trace(go.Scatter(
+            x=t, y=mem_eff_nh3, name="NH\u2083 Gradient Util.",
+            line=dict(color=TEAL, width=2.5),
+        ), row=1, col=2)
+        fig.add_trace(go.Scatter(
+            x=t, y=mem_eff_urea, name="Urea Gradient Util.",
+            line=dict(color=AMBER, width=2, dash="dash"),
+        ), row=1, col=2)
+        fig.update_yaxes(title_text="%", row=1, col=2)
+
+        # Plot 3: Bioreactor utilization
+        fig.add_trace(go.Scatter(
+            x=t, y=utilization_nh3, name="Metabolic Utilization",
+            line=dict(color=GREEN, width=2.5),
+            fill="tozeroy", fillcolor="rgba(16,185,129,0.1)",
+        ), row=2, col=1)
+        fig.add_trace(go.Scatter(
+            x=t, y=df["bio_cell_viability"] * 100, name="Viability",
+            line=dict(color=GRAY, width=1.5, dash="dot"),
+        ), row=2, col=1)
+        fig.update_yaxes(title_text="%", row=2, col=1)
+
+        # Plot 4: Instantaneous removal rate (delta per minute)
+        nh3_removal = -df["bio_C_NH3"].diff().fillna(0)  # positive = removal
+        lido_removal = -df["bio_C_lido"].diff().fillna(0)
+        fig.add_trace(go.Scatter(
+            x=t, y=nh3_removal, name="NH\u2083 removal",
+            line=dict(color=NAVY, width=2),
+        ), row=2, col=2)
+        fig.add_trace(go.Scatter(
+            x=t, y=lido_removal, name="Lido removal",
+            line=dict(color=INDIGO, width=2, dash="dash"),
+        ), row=2, col=2)
+        fig.update_yaxes(title_text="\u00b5mol/L/min", row=2, col=2)
+
+        for row in (1, 2):
+            for col in (1, 2):
+                fig.update_xaxes(title_text="Time (min)", row=row, col=col)
+
+        _fig_layout(fig, height=650, title="Efficiency & Utilization Analysis")
+        _show_chart(fig)
+
+        st.caption(
+            "**Overall Efficiency** = 0.6 \u00d7 NH\u2083 clearance + 0.4 \u00d7 Lido clearance (weighted by clinical priority)  \u2022  "
+            "**Membrane Transfer** = (\u0394C across membrane) / C\u2081 \u2014 how well the membrane maintains the driving force for metabolism  \u2022  "
+            "**Utilization** = (viability \u00d7 C\u2082) / C\u2082\u2080 \u2014 fraction of max metabolic capacity in use (drops as toxins are cleared and cells age)  \u2022  "
+            "**Removal Rate** = instantaneous concentration drop per minute"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Animated system schematic (HTML/CSS/SVG)
+# ---------------------------------------------------------------------------
+def render_schematic(r):
+    """Render an animated BAL circuit schematic using HTML/CSS/SVG."""
+
+    frames = []
+    for h in r["df"].to_dict("records"):
+        frames.append({
+            "t": round(h.get("time", 0), 1),
+            "sep_Q_plasma": round(h.get("sep_Q_plasma", 0), 1),
+            "sep_Q_cells": round(h.get("sep_Q_cells", 0), 1),
+            "sep_state": int(h.get("sep_alarm_code", 0)),
+            "pump_Q": round(h.get("pump_Q_plasma", 0), 1),
+            "pump_state": int(h.get("pump_alarm_code", 0)),
+            "bio_nh3": round(h.get("bio_C_NH3", 0), 1),
+            "bio_lido": round(h.get("bio_C_lido", 0), 1),
+            "bio_nh3_cv1": round(h.get("bio_C_NH3_CV1", 0), 1),
+            "bio_nh3_cv2": round(h.get("bio_C_NH3_CV2", 0), 1),
+            "bio_urea_cv1": round(h.get("bio_C_urea_CV1", 0), 1),
+            "bio_urea_cv2": round(h.get("bio_C_urea_CV2", 0), 1),
+            "bio_viability": round(h.get("bio_cell_viability", 1), 3),
+            "bio_clearance": round(h.get("bio_NH3_clearance", 0), 3),
+            "bio_state": int(h.get("bio_alarm_code", 0)),
+            "mix_Q": round(h.get("mix_Q_blood", 0), 1),
+            "mix_Hct": round(h.get("mix_Hct_out", 0), 3),
+            "mix_state": int(h.get("mix_alarm_code", 0)),
+            "mon_nh3": round(h.get("mon_C_NH3", 0), 1),
+            "mon_approved": bool(h.get("mon_return_approved", False)),
+            "mon_success": bool(h.get("mon_treatment_success", False)),
+            "mon_state": int(h.get("mon_alarm_code", 0)),
+        })
+
+    data_json = json.dumps(frames)
+    inlet_nh3 = r["params"]["NH3"]
+    v_cv1 = r["params"]["V_CV1"]
+    v_cv2 = r["params"]["V_CV2"]
+
+    from schematic import build_schematic_html
+    html = build_schematic_html(data_json, inlet_nh3, v_cv1, v_cv2)
+    components.html(html, height=620, scrolling=False)
+
+
+
+
+# ---------------------------------------------------------------------------
+# Module status pipeline
+# ---------------------------------------------------------------------------
+_ALARM_COLORS = {
+    0: (GREEN, "#ecfdf5"),
+    1: (AMBER, "#fffbeb"),
+    2: (RED, "#fef2f2"),
+    3: (RED, "#fef2f2"),
+}
+
+_MODULE_ORDER = [
+    ("Plasma Separator", "separator"),
+    ("Plasma Pump", "pump"),
+    ("Bioreactor", "bioreactor"),
+    ("Sampler", "sampler"),
+    ("Mixer", "mixer"),
+    ("Return Monitor", "return_monitor"),
+]
+
+
+def render_module_status(r):
+    st.markdown(f"<h3 style='color:{NAVY}'>System Module Status</h3>", unsafe_allow_html=True)
+
+    # Build HTML pipeline
+    cards_html = '<div style="display:flex;align-items:stretch;gap:4px;flex-wrap:wrap;">'
+
+    for i, (label, key) in enumerate(_MODULE_ORDER):
+        alarm = r["final"][key].get("alarm_code", 0)
+        state_name = r["final"][key].get("state_name", "UNKNOWN")
+        border_c, bg_c = _ALARM_COLORS.get(alarm, _ALARM_COLORS[0])
+
+        cards_html += f"""
+        <div style="flex:1;min-width:110px;border-left:4px solid {border_c};
+                     background:{bg_c};border-radius:6px;padding:10px 6px;text-align:center;">
+            <div class="mod-name">{label}</div>
+            <div class="mod-state" style="color:{border_c}">{state_name.replace('_',' ')}</div>
+        </div>"""
+
+        if i < len(_MODULE_ORDER) - 1:
+            cards_html += '<div class="flow-arrow">\u2192</div>'
+
+    cards_html += "</div>"
+
+    # Flow label
+    flow_label = (
+        f'<div style="display:flex;justify-content:space-between;padding:4px 8px;'
+        f'color:{GRAY};font-size:0.75rem;margin-top:2px;">'
+        f'<span>Patient Blood In \u2192</span><span>\u2192 Treated Blood Return</span></div>'
+    )
+    st.markdown(flow_label + cards_html, unsafe_allow_html=True)
+
+
+# ---------------------------------------------------------------------------
+# Treatment summary
+# ---------------------------------------------------------------------------
+def render_summary(r):
+    with st.expander("Treatment Summary & Details"):
+        col_l, col_r = st.columns(2)
+
+        with col_l:
+            st.markdown("**Input Parameters**")
+            p = r["params"]
+            st.markdown(
+                f"| Parameter | Value |\n|---|---|\n"
+                f"| NH\u2083 | {p['NH3']} \u00b5mol/L |\n"
+                f"| Lidocaine | {p['lido']} \u00b5mol/L |\n"
+                f"| Urea | {p['urea']} mmol/L |\n"
+                f"| Blood Flow | {p['Q_blood']} mL/min |\n"
+                f"| Hematocrit | {p['Hct']} |\n"
+                f"| Plasma Flow Target | {p['Q_target']} mL/min |\n"
+                f"| Duration | {r['duration']} min |"
+            )
+            st.markdown("**Bioreactor Sizing**")
+            st.markdown(
+                f"| Parameter | Value |\n|---|---|\n"
+                f"| CV1 Volume | {p['V_CV1']} mL |\n"
+                f"| CV2 Volume | {p['V_CV2']} mL |\n"
+                f"| Membrane Area | {p['A_m']:,.0f} cm\u00b2 |\n"
+                f"| P_m NH\u2083 | {p['P_m_NH3']} cm/min |\n"
+                f"| P_m Urea | {p['P_m_urea']} cm/min |\n"
+                f"| P_m Lido | {p['P_m_lido']} cm/min |\n"
+                f"| P_m MEGX | {p['P_m_MEGX']} cm/min |\n"
+                f"| k\u2081 NH\u2083 | {p['k1_NH3']} /min |\n"
+                f"| k\u2081 Lido | {p['k1_lido']} /min |\n"
+                f"| k_decay | {p['k_decay']} /min |"
+            )
+
+        with col_r:
+            st.markdown("**Outcome**")
+            bio = r["final"]["bioreactor"]
+            mon = r["final"]["return_monitor"]
+            st.markdown(
+                f"| Metric | Value |\n|---|---|\n"
+                f"| Final NH\u2083 | {bio['C_NH3']:.1f} \u00b5mol/L |\n"
+                f"| Final Lidocaine | {bio['C_lido']:.1f} \u00b5mol/L |\n"
+                f"| NH\u2083 Clearance | {bio['NH3_clearance']*100:.1f}% |\n"
+                f"| Lido Clearance | {bio['lido_clearance']*100:.1f}% |\n"
+                f"| Cell Viability | {bio['cell_viability']*100:.1f}% |\n"
+                f"| Return Approved | {'Yes' if mon['return_approved'] else 'No'} |\n"
+                f"| Treatment Success | {'Yes' if mon['treatment_success'] else 'No'} |"
+            )
+
+        if r["severity"]:
+            st.markdown("---")
+            st.markdown("**Adaptive Controller Adjustments**")
+            adj = r["adjustments"]
+            items = [f"- Severity: **{r['severity'].upper()}**",
+                     f"- Flow rate: 30 \u2192 **{adj['Q_plasma']} mL/min**",
+                     f"- Duration: {r['params']['duration']} \u2192 **{r['duration']} min**"]
+            if adj.get("fresh_cartridge"):
+                items.append(f"- Fresh hepatocyte cartridge installed (k\u2081 \u00d7{adj['k1_multiplier']:.1f})")
+            if adj.get("temperature_boost", 0) > 0:
+                items.append(f"- Temperature boost: +{adj['temperature_boost']}\u00b0C")
+            st.markdown("\n".join(items))
+
+        st.markdown("---")
+        st.markdown("**Core Mass Balance Equations (Two-Compartment Bioreactor)**")
+        st.latex(r"\frac{dC_{NH_3}^{CV1}}{dt} = \frac{Q}{V_1}\left(C_{NH_3}^{in} - C_{NH_3}^{CV1}\right) - \frac{P_m \cdot A_m}{V_1}\left(C_{NH_3}^{CV1} - C_{NH_3}^{CV2}\right)")
+        st.latex(r"\frac{dC_{NH_3}^{CV2}}{dt} = \frac{P_m \cdot A_m}{V_2}\left(C_{NH_3}^{CV1} - C_{NH_3}^{CV2}\right) - k_1 \cdot C_{NH_3}^{CV2}")
+        st.latex(r"\frac{dC_{urea}^{CV2}}{dt} = \frac{1}{2}\,k_1 \cdot C_{NH_3}^{CV2} - \frac{P_m \cdot A_m}{V_2}\left(C_{urea}^{CV2} - C_{urea}^{CV1}\right)")
+        st.caption("2 NH\u2083 \u2192 1 Urea (urea cycle) \u2022 1 Lidocaine \u2192 1 MEGX (CYP450)")
+
+
+# ---------------------------------------------------------------------------
+# Downloads
+# ---------------------------------------------------------------------------
+def render_downloads(r):
+    col1, col2 = st.columns(2)
+    with col1:
+        csv = r["df"].to_csv(index=False)
+        st.download_button("Download Results CSV", csv,
+                           "bal_simulation_results.csv", "text/csv",
+                           use_container_width=True)
+    with col2:
+        # Build a JSON-safe version (convert numpy types)
+        json_data = json.dumps({
+            "params": r["params"],
+            "severity": r["severity"],
+            "duration": r["duration"],
+            "final_nh3": float(r["final"]["bioreactor"]["C_NH3"]),
+            "final_lido": float(r["final"]["bioreactor"]["C_lido"]),
+            "cell_viability": float(r["final"]["bioreactor"]["cell_viability"]),
+            "treatment_success": bool(r["final"]["return_monitor"]["treatment_success"]),
+        }, indent=2)
+        st.download_button("Download Summary JSON", json_data,
+                           "bal_summary.json", "application/json",
+                           use_container_width=True)
+
+
+# ---------------------------------------------------------------------------
+# About
+# ---------------------------------------------------------------------------
+def render_about():
+    with st.expander("About the BAL Digital Twin"):
+        st.markdown(f"""
+**Bioartificial Liver (BAL) Support Device** — Senior Capstone Project, UGA
+
+Acute hepatic failure has limited treatment options beyond liver transplantation,
+which is constrained by donor shortages and time pressure (50-80% mortality).
+This digital twin simulates an extracorporeal BAL device that processes patient
+blood through a hollow-fiber bioreactor containing viable hepatocytes.
+
+**System Pipeline:**
+Plasma Separator \u2192 Pump Control \u2192 Bioreactor \u2192 Sampler \u2192 Mixer \u2192 Return Monitor
+
+**Key Design Parameters:**
+| Parameter | Value |
+|---|---|
+| Membrane Area | 10,000 cm\u00b2 (polysulfone) |
+| Compartment Volumes | 100 mL each (CV1 + CV2) |
+| Hepatocyte Count | 5 \u00d7 10\u2078 cells |
+| Plasma Flow | 30 mL/min (simulation) |
+
+**Team:** Bioartificial Liver Support Group \u2022 **Advisor:** Dr. James Kastner \u2022 **Mentor:** Dr. Anjan Panneer Selvam
+        """)
+
+
+# ---------------------------------------------------------------------------
+# Welcome state
+# ---------------------------------------------------------------------------
+def render_welcome():
+    st.markdown(
+        f"""
+        <div style="text-align:center;padding:60px 20px;background:{CARD};
+                    border-radius:12px;margin:20px 0;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+            <div style="font-size:3rem;margin-bottom:12px;">\U0001f9ec</div>
+            <h3 style="color:{NAVY};margin:0">Configure & Run</h3>
+            <p style="color:{GRAY};max-width:500px;margin:8px auto 0;">
+                Select a patient preset in the sidebar, adjust parameters as needed,
+                and click <strong>Run Simulation</strong> to begin treatment analysis.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+def main():
+    inject_css()
+
+    # Header
+    st.markdown(
+        f"""
+        <div style="text-align:center;padding:0.8rem 0 0.2rem;">
+            <h1 style="color:{NAVY};margin:0;font-size:2rem;">Bioartificial Liver Digital Twin</h1>
+            <p style="color:{GRAY};margin:4px 0 0;font-size:1.05rem;">
+                Treatment Simulation & Monitoring Dashboard
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    params, adaptive, run_clicked = render_sidebar()
+
+    if run_clicked:
+        with st.spinner("Running simulation..."):
+            result = run_simulation(params, adaptive)
+            st.session_state.sim_result = result
+
+    if "sim_result" in st.session_state:
+        r = st.session_state.sim_result
+        render_metrics(r)
+        st.markdown("---")
+        st.markdown(f"<h3 style='color:{NAVY}'>Live System Schematic</h3>", unsafe_allow_html=True)
+        render_schematic(r)
+        st.markdown("---")
+        render_plots(r)
+        st.markdown("---")
+        render_module_status(r)
+        st.markdown("---")
+        render_summary(r)
+        render_downloads(r)
+    else:
+        render_welcome()
+
+    render_about()
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,260 @@
+"""
+Module 3: Bioreactor System
+
+Simplified implementation focusing on core metabolism:
+- Ammonia → Urea conversion
+- Lidocaine metabolism
+- Cell viability tracking
+"""
+
+from typing import Dict, Any
+from modules.base_module import BaseModule
+from config.constants import (
+    BIOREACTOR_STATES,
+    BIOREACTOR_INPUTS,
+    BIOREACTOR_THRESHOLDS
+)
+
+
+class BioreactorSystem(BaseModule):
+    """
+    Bioreactor Module - Blood detoxification via hepatocyte metabolism
+
+    Simplified model using first-order kinetics:
+    - NH₃ + hepatocytes → Urea (ammonia detoxification)
+    - Lidocaine + hepatocytes → MEGX (drug metabolism)
+    - Cell viability decays over time
+
+    States:
+        0 - STARTUP_CONDITIONING: Initial equilibration
+        1 - NORMAL_OPERATION: Effective detoxification
+        2 - DEGRADED_PERFORMANCE: Reduced efficiency
+        3 - CRITICAL_FAILURE: Minimal function
+        4 - SHUTDOWN_POST_TREATMENT: Treatment complete
+    """
+
+    def __init__(self):
+        """Initialize Bioreactor System."""
+        super().__init__("Bioreactor System")
+
+        # Initial state
+        self.state = BIOREACTOR_STATES['STARTUP_CONDITIONING']
+
+        # Input parameters
+        self.Q_plasma = 0.0
+        self.P_plasma = 80.0
+        self.T_plasma = 37.0
+
+        # Inlet concentrations
+        self.C_NH3_in = BIOREACTOR_INPUTS['C_NH3_in_nominal']
+        self.C_lido_in = BIOREACTOR_INPUTS['C_lido_in_nominal']
+        self.C_urea_in = BIOREACTOR_INPUTS['C_urea_in_nominal']
+
+        # Outlet concentrations (calculated)
+        self.C_NH3_out = self.C_NH3_in  # Start unchanged
+        self.C_lido_out = self.C_lido_in
+        self.C_urea_out = self.C_urea_in
+
+        # Reactor state
+        self.cell_viability = 1.0       # Start at 100%
+        self.membrane_permeability = 1.0  # Start at 100%
+        self.DO = 40.0                  # Dissolved oxygen (mmHg)
+
+        # Performance metrics
+        self.NH3_clearance = 0.0        # Fraction removed
+        self.lido_clearance = 0.0       # Fraction removed
+        self.treatment_time = 0.0       # Total treatment time
+
+    def update(self, dt: float = 1.0, **inputs) -> Dict[str, Any]:
+        """
+        Update bioreactor for one time step.
+
+        Args:
+            dt: Time step in minutes
+            **inputs: From upstream (pump or separator)
+                - Q_plasma: Plasma flow rate (mL/min)
+                - P_plasma: Pressure (mmHg)
+                - T_plasma: Temperature (°C)
+                - C_NH3: Inlet ammonia (µmol/L)
+                - C_lido: Inlet lidocaine (µmol/L)
+                - C_urea: Inlet urea (mmol/L)
+
+        Returns:
+            Dict with treated concentrations and performance metrics
+        """
+        # Update timing
+        self.time_in_state += dt
+        self.simulation_time += dt
+        self.treatment_time += dt
+
+        # Update inputs
+        self._update_inputs(**inputs)
+
+        # Simulate cell decay over time
+        self._update_cell_viability(dt)
+
+        # Perform metabolic conversions
+        self._perform_metabolism(dt)
+
+        # Calculate performance metrics
+        self._calculate_performance()
+
+        # Update state machine
+        self._check_state_transition()
+
+        return self._get_outputs()
+
+    def _update_inputs(self, **inputs):
+        """Update input parameters from upstream modules."""
+        self.Q_plasma = inputs.get('Q_plasma', 0.0)
+        self.P_plasma = inputs.get('P_plasma', 80.0)
+        self.T_plasma = inputs.get('T_plasma', 37.0)
+
+        # Concentrations
+        self.C_NH3_in = inputs.get('C_NH3', BIOREACTOR_INPUTS['C_NH3_in_nominal'])
+        self.C_lido_in = inputs.get('C_lido', BIOREACTOR_INPUTS['C_lido_in_nominal'])
+        self.C_urea_in = inputs.get('C_urea', BIOREACTOR_INPUTS['C_urea_in_nominal'])
+
+    def _perform_metabolism(self, dt: float):
+        """
+        QUICK DEMO MODE: Apply fixed clearance rates.
+        
+        This simplified version applies consistent clearance regardless
+        of residence time, showing the system working end-to-end.
+        
+        TODO: Replace with proper CSTR model for realistic kinetics.
+        """
+        # Fixed clearance targets (adjusted by viability)
+        target_NH3_clearance = 0.60 * self.cell_viability  # 60% reduction
+        target_lido_clearance = 0.67 * self.cell_viability  # 67% reduction
+        
+        # Apply exponential decay for smooth progression
+        # After 60 minutes, should reach target clearance
+        decay_factor = 1.0 - (dt / 40.0)  # Gradual approach over 60 min
+        
+        # Ammonia reduction with smooth approach to target
+        if not hasattr(self, '_NH3_cumulative_factor'):
+            self._NH3_cumulative_factor = 1.0
+        
+        self._NH3_cumulative_factor *= (1 - target_NH3_clearance * dt / 40.0)
+        self.C_NH3_out = self.C_NH3_in * self._NH3_cumulative_factor
+        
+        # Lidocaine reduction
+        if not hasattr(self, '_lido_cumulative_factor'):
+            self._lido_cumulative_factor = 1.0
+            
+        self._lido_cumulative_factor *= (1 - target_lido_clearance * dt / 40.0)
+        self.C_lido_out = self.C_lido_in * self._lido_cumulative_factor
+        
+        # Urea generation (proportional to NH3 removed)
+        NH3_removed = self.C_NH3_in - self.C_NH3_out
+        urea_generated = (NH3_removed / 17.0) * (60.0 / 2.0)  # Stoichiometry
+        self.C_urea_out = self.C_urea_in + urea_generated * 0.001
+        
+        # Ensure realistic bounds
+        self.C_NH3_out = max(30.0, min(self.C_NH3_out, self.C_NH3_in))
+        self.C_lido_out = max(5.0, min(self.C_lido_out, self.C_lido_in))
+        self.C_urea_out = max(self.C_urea_in, self.C_urea_out)
+
+
+    def _update_cell_viability(self, dt: float):
+        """Cell viability decays over time."""
+        decay_rate = BIOREACTOR_THRESHOLDS['k_cell_decay']
+        self.cell_viability *= (1 - decay_rate * dt)
+        self.cell_viability = max(0.1, self.cell_viability)  # Minimum 10%
+
+    def _calculate_performance(self):
+        """Calculate clearance efficiency."""
+        if self.C_NH3_in > 0:
+            self.NH3_clearance = (self.C_NH3_in - self.C_NH3_out) / self.C_NH3_in
+        else:
+            self.NH3_clearance = 0.0
+
+        if self.C_lido_in > 0:
+            self.lido_clearance = (self.C_lido_in - self.C_lido_out) / self.C_lido_in
+        else:
+            self.lido_clearance = 0.0
+
+    def _check_state_transition(self):
+        """Update state based on performance."""
+        current = self.state
+
+        # STARTUP → NORMAL
+        if current == BIOREACTOR_STATES['STARTUP_CONDITIONING']:
+            if self.time_in_state >= BIOREACTOR_THRESHOLDS['conditioning_duration']:
+                self.state = BIOREACTOR_STATES['NORMAL_OPERATION']
+                self.time_in_state = 0.0
+
+        # NORMAL → DEGRADED or CRITICAL
+        elif current == BIOREACTOR_STATES['NORMAL_OPERATION']:
+            if self.cell_viability < BIOREACTOR_THRESHOLDS['viability_critical']:
+                self.state = BIOREACTOR_STATES['CRITICAL_FAILURE']
+                self.time_in_state = 0.0
+            elif (self.NH3_clearance < BIOREACTOR_THRESHOLDS['NH3_clearance_degraded'] or
+                  self.cell_viability < BIOREACTOR_THRESHOLDS['viability_degraded']):
+                self.state = BIOREACTOR_STATES['DEGRADED_PERFORMANCE']
+                self.time_in_state = 0.0
+
+        # DEGRADED → NORMAL or CRITICAL
+        elif current == BIOREACTOR_STATES['DEGRADED_PERFORMANCE']:
+            if (self.NH3_clearance >= BIOREACTOR_THRESHOLDS['NH3_clearance_normal'] and
+                self.cell_viability >= BIOREACTOR_THRESHOLDS['viability_degraded']):
+                self.state = BIOREACTOR_STATES['NORMAL_OPERATION']
+                self.time_in_state = 0.0
+            elif self.cell_viability < BIOREACTOR_THRESHOLDS['viability_critical']:
+                self.state = BIOREACTOR_STATES['CRITICAL_FAILURE']
+                self.time_in_state = 0.0
+
+        # Check for treatment completion
+        if self.treatment_time >= BIOREACTOR_THRESHOLDS['treatment_duration_max']:
+            self.state = BIOREACTOR_STATES['SHUTDOWN_POST_TREATMENT']
+            self.time_in_state = 0.0
+
+    def _get_outputs(self) -> Dict[str, Any]:
+        """Package outputs for downstream modules."""
+        return {
+            # Flow parameters
+            'Q_plasma': self.Q_plasma,
+            'P_plasma': self.P_plasma - 5,  # Small pressure drop
+            'T_plasma': self.T_plasma,
+
+            # Treated concentrations
+            'C_NH3': self.C_NH3_out,
+            'C_lido': self.C_lido_out,
+            'C_urea': self.C_urea_out,
+
+            # Performance metrics
+            'NH3_clearance': self.NH3_clearance,
+            'lido_clearance': self.lido_clearance,
+            'cell_viability': self.cell_viability,
+            'treatment_time': self.treatment_time,
+
+            # Status
+            'state': self.state,
+            'state_name': self.get_state_name(),
+            'alarm_code': self._get_alarm_code()
+        }
+
+    def _get_alarm_code(self) -> int:
+        """Get alarm code based on current state."""
+        if self.state in [BIOREACTOR_STATES['STARTUP_CONDITIONING'], BIOREACTOR_STATES['NORMAL_OPERATION']]:
+            return 0  # No alarm
+        elif self.state == BIOREACTOR_STATES['DEGRADED_PERFORMANCE']:
+            return 1  # Warning
+        elif self.state == BIOREACTOR_STATES['CRITICAL_FAILURE']:
+            return 2  # Critical
+        elif self.state == BIOREACTOR_STATES['SHUTDOWN_POST_TREATMENT']:
+            return 0  # No alarm (normal shutdown)
+        else:
+            return 0
+
+    def get_state_name(self) -> str:
+        """Return human-readable state name."""
+        state_names = {
+            0: 'STARTUP_CONDITIONING',
+            1: 'NORMAL_OPERATION',
+            2: 'DEGRADED_PERFORMANCE',
+            3: 'CRITICAL_FAILURE',
+            4: 'SHUTDOWN_POST_TREATMENT'
+        }
+        return state_names.get(self.state, 'UNKNOWN')
