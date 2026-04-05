@@ -591,8 +591,36 @@ def render_sidebar():
 # ---------------------------------------------------------------------------
 # Simulation runner
 # ---------------------------------------------------------------------------
+def _apply_sim_constants(params):
+    """Apply patient + bioreactor params to global constants."""
+    constants.SEPARATOR_INPUTS["C_NH3_in_nominal"] = params["NH3"]
+    constants.SEPARATOR_INPUTS["C_lido_in_nominal"] = params["lido"]
+    constants.SEPARATOR_INPUTS["C_urea_in_nominal"] = params["urea"]
+    constants.SEPARATOR_INPUTS["Q_blood_nominal"] = params["Q_blood"]
+    constants.SEPARATOR_INPUTS["Hct_in_nominal"] = params["Hct"]
+    constants.PUMP_THRESHOLDS["Q_target"] = params["Q_target"]
+    constants.BIOREACTOR_VOLUMES["V_CV1"] = params["V_CV1"]
+    constants.BIOREACTOR_VOLUMES["V_CV2"] = params["V_CV2"]
+    constants.MEMBRANE_TRANSPORT["A_m"] = params["A_m"]
+    constants.MEMBRANE_TRANSPORT["P_m_NH3"] = params["P_m_NH3"]
+    constants.MEMBRANE_TRANSPORT["P_m_urea"] = params["P_m_urea"]
+    constants.MEMBRANE_TRANSPORT["P_m_lido"] = params["P_m_lido"]
+    constants.MEMBRANE_TRANSPORT["P_m_MEGX"] = params["P_m_MEGX"]
+    constants.MEMBRANE_TRANSPORT["P_m_GX"] = params["P_m_GX"]
+    constants.HEPATOCYTE_KINETICS["k1_NH3_base"] = params["k1_NH3"]
+    constants.HEPATOCYTE_KINETICS["k1_lido_base"] = params["k1_lido"]
+    constants.HEPATOCYTE_KINETICS["k2_MEGX_base"] = params["k2_MEGX"]
+    constants.BIOREACTOR_THRESHOLDS["k_cell_decay"] = params["k_decay"]
+
+
 def run_simulation(params, adaptive):
-    """Run simulation with safe constant mutation."""
+    """Run 2-stage series-parallel simulation (4 units: 2× parallel × 2 stages).
+
+    Stage 1: Patient plasma → bioreactor (2 parallel units at Q_target each)
+    Stage 2: Stage 1 outlet → second bioreactor (2 parallel units)
+    Each parallel pair is identical, so we simulate one unit per stage.
+    Clearance is reported relative to original patient inlet.
+    """
 
     # Save originals
     orig_sep = copy.deepcopy(constants.SEPARATOR_INPUTS)
@@ -607,27 +635,7 @@ def run_simulation(params, adaptive):
     duration = params["duration"]
 
     try:
-        # Apply patient parameters
-        constants.SEPARATOR_INPUTS["C_NH3_in_nominal"] = params["NH3"]
-        constants.SEPARATOR_INPUTS["C_lido_in_nominal"] = params["lido"]
-        constants.SEPARATOR_INPUTS["C_urea_in_nominal"] = params["urea"]
-        constants.SEPARATOR_INPUTS["Q_blood_nominal"] = params["Q_blood"]
-        constants.SEPARATOR_INPUTS["Hct_in_nominal"] = params["Hct"]
-        constants.PUMP_THRESHOLDS["Q_target"] = params["Q_target"]
-
-        # Apply bioreactor sizing
-        constants.BIOREACTOR_VOLUMES["V_CV1"] = params["V_CV1"]
-        constants.BIOREACTOR_VOLUMES["V_CV2"] = params["V_CV2"]
-        constants.MEMBRANE_TRANSPORT["A_m"] = params["A_m"]
-        constants.MEMBRANE_TRANSPORT["P_m_NH3"] = params["P_m_NH3"]
-        constants.MEMBRANE_TRANSPORT["P_m_urea"] = params["P_m_urea"]
-        constants.MEMBRANE_TRANSPORT["P_m_lido"] = params["P_m_lido"]
-        constants.MEMBRANE_TRANSPORT["P_m_MEGX"] = params["P_m_MEGX"]
-        constants.MEMBRANE_TRANSPORT["P_m_GX"] = params["P_m_GX"]
-        constants.HEPATOCYTE_KINETICS["k1_NH3_base"] = params["k1_NH3"]
-        constants.HEPATOCYTE_KINETICS["k1_lido_base"] = params["k1_lido"]
-        constants.HEPATOCYTE_KINETICS["k2_MEGX_base"] = params["k2_MEGX"]
-        constants.BIOREACTOR_THRESHOLDS["k_cell_decay"] = params["k_decay"]
+        _apply_sim_constants(params)
 
         if adaptive:
             ctrl = AdaptiveBALController()
@@ -635,30 +643,93 @@ def run_simulation(params, adaptive):
             adjustments = ctrl.calculate_adjustments(severity, params["NH3"], params["lido"])
             duration = ctrl.apply_adjustments(adjustments)
 
-        sim = SimulationEngine(dt=1.0)
-        steps = int(duration / sim.dt)
-        for _ in range(steps):
-            sim.step()
+        steps = int(duration)
 
-        # Build dataframe
+        # --- Stage 1: patient plasma at original concentrations ---
+        _apply_sim_constants(params)
+        sim1 = SimulationEngine(dt=1.0)
+        for _ in range(steps):
+            sim1.step()
+
+        # --- Stage 2: feed stage-1 outlet into a fresh bioreactor ---
+        s1_final = sim1.history[-1]["bioreactor"]
+        _apply_sim_constants(params)
+        constants.SEPARATOR_INPUTS["C_NH3_in_nominal"] = s1_final["C_NH3"]
+        constants.SEPARATOR_INPUTS["C_lido_in_nominal"] = s1_final["C_lido"]
+        constants.SEPARATOR_INPUTS["C_urea_in_nominal"] = s1_final["C_urea"]
+
+        sim2 = SimulationEngine(dt=1.0)
+        for _ in range(steps):
+            sim2.step()
+
+        # Build dataframe — stage 2 bioreactor is patient-facing output;
+        # separator/pump from stage 1 (real upstream); mixer/monitor from stage 2
+        orig_nh3 = params["NH3"]
+        orig_lido = params["lido"]
         records = []
-        for h in sim.history:
-            row = {"time": h["time"]}
-            for mod_key in ("separator", "pump", "bioreactor", "sampler", "mixer", "return_monitor"):
-                prefix = {
-                    "separator": "sep", "pump": "pump", "bioreactor": "bio",
-                    "sampler": "samp", "mixer": "mix", "return_monitor": "mon",
-                }[mod_key]
-                for k, v in h[mod_key].items():
+        for i, h2 in enumerate(sim2.history):
+            h1 = sim1.history[i] if i < len(sim1.history) else sim1.history[-1]
+            row = {"time": h2["time"]}
+
+            # Separator & pump from stage 1 (upstream modules)
+            for mod_key, prefix in [("separator", "sep"), ("pump", "pump")]:
+                for k, v in h1[mod_key].items():
                     if isinstance(v, (int, float, bool, np.integer, np.floating)):
                         row[f"{prefix}_{k}"] = v
+
+            # Bioreactor from stage 2 (final patient-facing output)
+            for k, v in h2["bioreactor"].items():
+                if isinstance(v, (int, float, bool, np.integer, np.floating)):
+                    row[f"bio_{k}"] = v
+
+            # Recalculate clearance relative to original patient inlet
+            if orig_nh3 > 0:
+                row["bio_NH3_clearance"] = (orig_nh3 - h2["bioreactor"]["C_NH3"]) / orig_nh3
+            if orig_lido > 0:
+                row["bio_lido_clearance"] = (orig_lido - h2["bioreactor"]["C_lido"]) / orig_lido
+
+            # Stage 1 bioreactor data (for two-compartment comparison)
+            for k, v in h1["bioreactor"].items():
+                if isinstance(v, (int, float, bool, np.integer, np.floating)):
+                    row[f"s1_bio_{k}"] = v
+            if orig_nh3 > 0:
+                row["s1_bio_NH3_clearance"] = (orig_nh3 - h1["bioreactor"]["C_NH3"]) / orig_nh3
+            if orig_lido > 0:
+                row["s1_bio_lido_clearance"] = (orig_lido - h1["bioreactor"]["C_lido"]) / orig_lido
+
+            # Sampler from stage 2
+            for k, v in h2["sampler"].items():
+                if isinstance(v, (int, float, bool, np.integer, np.floating)):
+                    row[f"samp_{k}"] = v
+
+            # Mixer & return monitor from stage 2
+            for mod_key, prefix in [("mixer", "mix"), ("return_monitor", "mon")]:
+                for k, v in h2[mod_key].items():
+                    if isinstance(v, (int, float, bool, np.integer, np.floating)):
+                        row[f"{prefix}_{k}"] = v
+
             records.append(row)
         df = pd.DataFrame(records)
 
+        # Final state: merge stage 1 upstream with stage 2 downstream
+        final = {
+            "separator": sim1.history[-1]["separator"],
+            "pump": sim1.history[-1]["pump"],
+            "bioreactor": sim2.history[-1]["bioreactor"],
+            "sampler": sim2.history[-1]["sampler"],
+            "mixer": sim2.history[-1]["mixer"],
+            "return_monitor": sim2.history[-1]["return_monitor"],
+        }
+        # Override clearance in final bioreactor to reflect original inlet
+        if orig_nh3 > 0:
+            final["bioreactor"]["NH3_clearance"] = (orig_nh3 - final["bioreactor"]["C_NH3"]) / orig_nh3
+        if orig_lido > 0:
+            final["bioreactor"]["lido_clearance"] = (orig_lido - final["bioreactor"]["C_lido"]) / orig_lido
+
         result = {
             "df": df,
-            "final": sim.history[-1],
-            "module_states": sim.get_module_states(),
+            "final": final,
+            "module_states": sim2.get_module_states(),
             "params": params,
             "severity": severity,
             "adjustments": adjustments,
@@ -1700,20 +1771,29 @@ def render_explainer(r):
         f"{p['Q_blood']:.0f} mL/min for **{dur} minutes**. The plasma separator "
         f"first split the blood into plasma and cellular components (RBCs, WBCs, "
         f"platelets). Only the plasma\u2014carrying the dissolved toxins\u2014was "
-        f"pumped through the bioreactor at {p['Q_target']:.0f} mL/min. "
-        f"The cellular components bypassed the bioreactor and were recombined with "
-        f"the treated plasma in the mixer before returning to the patient."
+        f"pumped through the bioreactor system at {p['Q_target']:.0f} mL/min per unit."
     )
 
     lines.append("")
-    lines.append("#### Inside the bioreactor")
+    lines.append("#### System configuration (4-unit, 2\u00d72 series-parallel)")
     lines.append(
-        f"The bioreactor contains two compartments separated by a polysulfone "
-        f"membrane ({p['A_m']:,.0f} cm\u00b2 surface area):\n\n"
+        f"The device uses **4 flat-disc cylindrical cartridges** (35\u00d720 cm each), "
+        f"arranged as 2\u00d7 parallel units per stage \u00d7 2 stages in series. "
+        f"The plasma flow ({p['Q_blood']:.0f} mL/min) is split between 2 parallel "
+        f"units at {p['Q_target']:.0f} mL/min each. After Stage 1, the partially "
+        f"treated plasma feeds into Stage 2 for a second pass through fresh "
+        f"bioreactor units, achieving deeper toxin clearance than a single stage."
+    )
+
+    lines.append("")
+    lines.append("#### Inside each bioreactor unit")
+    lines.append(
+        f"Each cartridge contains two compartments separated by a polysulfone "
+        f"flat-disc membrane ({p['A_m']:,.0f} cm\u00b2 surface area):\n\n"
         f"- **CV1 (Plasma side, {p['V_CV1']:.0f} mL):** Toxic plasma flows through "
         f"this compartment. Ammonia and lidocaine diffuse across the membrane into CV2 "
         f"driven by the concentration gradient.\n"
-        f"- **CV2 (Hepatocyte side, {p['V_CV2']:.0f} mL):** Contains ~5\u00d710\u2078 "
+        f"- **CV2 (Hepatocyte side, {p['V_CV2']:.0f} mL):** Contains ~3.6\u00d710\u2079 "
         f"viable hepatocytes (liver cells) that metabolize the toxins. Ammonia is "
         f"converted to urea via the **urea cycle** (2 NH\u2083 \u2192 1 Urea), and "
         f"lidocaine is metabolized through a two-step **CYP450 pathway**: first "
@@ -1721,7 +1801,8 @@ def render_explainer(r):
         f"(1 MEGX \u2192 1 GX). All products diffuse back across the membrane.\n\n"
         f"This is modeled by **10 coupled ordinary differential equations** (forward "
         f"Euler integration, 1-minute time steps) tracking concentrations of NH\u2083, "
-        f"urea, lidocaine, and MEGX in both compartments simultaneously."
+        f"urea, lidocaine, MEGX, and GX in both compartments. The simulation runs "
+        f"2 stages in series\u2014Stage 1 outlet feeds Stage 2 inlet."
     )
 
     lines.append("")
