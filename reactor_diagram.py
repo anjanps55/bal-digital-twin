@@ -27,12 +27,12 @@ body{{font-family:Inter,-apple-system,sans-serif;background:#0f172a;color:#e2e8f
 #shell{{flex:1;background:#1a1f2e;border:2px solid #334155;border-radius:16px;position:relative;overflow:hidden;display:flex;flex-direction:column}}
 #shell-label{{position:absolute;top:8px;left:12px;font-size:9px;color:#475569;text-transform:uppercase;letter-spacing:1px;z-index:5}}
 
-/* Fiber bundle area */
-#fibers{{flex:1;display:flex;flex-direction:column;justify-content:center;padding:0 16px;gap:4px;position:relative}}
+/* Compartment bundle area */
+#compartments{{flex:1;display:flex;flex-direction:column;justify-content:center;padding:0 16px;gap:4px;position:relative}}
 
-/* Single fiber/compartment row */
-.fiber{{display:flex;align-items:stretch;height:52px;position:relative}}
-.fiber-lumen{{flex:1;border-radius:8px;position:relative;overflow:hidden;border:1.5px solid #475569}}
+/* Single disc-compartment row */
+.disc-row{{display:flex;align-items:stretch;height:52px;position:relative}}
+.disc-lumen{{flex:1;border-radius:8px;position:relative;overflow:hidden;border:1.5px solid #475569}}
 .lumen-inner{{position:absolute;inset:2px;border-radius:6px;transition:background 0.4s}}
 .lumen-label{{position:absolute;left:8px;top:4px;font-size:8px;color:#94a3b8;font-weight:600;z-index:2}}
 .lumen-flow{{position:absolute;top:50%;transform:translateY(-50%);font-size:9px;color:#64748b;z-index:2}}
@@ -103,17 +103,17 @@ body{{font-family:Inter,-apple-system,sans-serif;background:#0f172a;color:#e2e8f
     <div class="io-val mol mol-nh3" id="in_nh3">-</div>
     <div class="io-val mol mol-lido" id="in_lido">-</div>
     <svg width="20" height="60"><path d="M10 0 L10 45 L4 39 M10 45 L16 39" stroke="#475569" fill="none" stroke-width="1.5"/></svg>
-    <div class="io-label" style="font-size:8px;color:#334155">Q = <span id="in_q">30</span></div>
+    <div class="io-label" style="font-size:8px;color:#334155">Q = <span id="in_q">75</span></div>
   </div>
 
   <!-- Bioreactor shell -->
   <div id="shell">
     <div id="shell-label">Bioreactor Shell &mdash; Polysulfone Flat-Disc Membrane (35&times;20 cm cylindrical cartridge)</div>
 
-    <div id="fibers">
-      <!-- Fiber 1 (NH3/Urea pathway) -->
-      <div class="fiber">
-        <div class="fiber-lumen">
+    <div id="compartments">
+      <!-- Disc 1 (NH3/Urea pathway) -->
+      <div class="disc-row">
+        <div class="disc-lumen">
           <div class="lumen-inner" id="lum1"></div>
           <div class="lumen-label">CV1 &mdash; Lumen (Plasma)</div>
           <div style="position:absolute;bottom:4px;left:8px;right:8px;display:flex;flex-direction:column;gap:2px;z-index:2">
@@ -160,9 +160,9 @@ body{{font-family:Inter,-apple-system,sans-serif;background:#0f172a;color:#e2e8f
         </div>
       </div>
 
-      <!-- Fiber 2 (Lido/MEGX/GX pathway) -->
-      <div class="fiber">
-        <div class="fiber-lumen">
+      <!-- Disc 2 (Lido/MEGX/GX pathway) -->
+      <div class="disc-row">
+        <div class="disc-lumen">
           <div class="lumen-inner" id="lum2"></div>
           <div class="lumen-label">CV1 &mdash; Lumen (Plasma)</div>
           <div style="position:absolute;bottom:4px;left:8px;right:8px;display:flex;flex-direction:column;gap:2px;z-index:2">
@@ -245,7 +245,7 @@ body{{font-family:Inter,-apple-system,sans-serif;background:#0f172a;color:#e2e8f
     // Inlet
     $('in_nh3').textContent='NH\u2083 '+INH3;
     $('in_lido').textContent='Lido '+ILIDO;
-    $('in_q').textContent=d.pump_Q||30;
+    $('in_q').textContent=d.pump_Q||75;
 
     // Outlet
     $('out_nh3').textContent='NH\u2083 '+d.bio_nh3;
@@ -253,26 +253,26 @@ body{{font-family:Inter,-apple-system,sans-serif;background:#0f172a;color:#e2e8f
     $('out_lido').textContent='Lido '+d.bio_lido;
     $('out_lido').style.color=d.bio_lido<12?'#10b981':'#a5b4fc';
 
-    // Fiber 1 lumen color (NH3 intensity)
+    // Disc 1 lumen color (NH3 intensity)
     let i1=Math.min(d.bio_nh3_cv1/Math.max(INH3,50),1);
     $('lum1').style.background='rgba(239,68,68,'+(0.04+i1*0.12).toFixed(3)+')';
     $('f1_nh3').textContent=d.bio_nh3_cv1;
     $('f1_urea').textContent=d.bio_urea_cv1;
 
-    // Fiber 1 ECS color
+    // Disc 1 ECS color
     let i2=Math.min(d.bio_nh3_cv2/Math.max(INH3,50),1);
     $('ecs1').style.background='rgba(13,148,136,'+(0.04+(1-i2)*0.12).toFixed(3)+')';
     $('f1_nh3_cv2').textContent=d.bio_nh3_cv2;
     $('f1_urea_cv2').textContent=d.bio_urea_cv2;
 
-    // Fiber 2 lumen (Lido)
+    // Disc 2 lumen (Lido)
     let li1=Math.min(d.bio_lido/Math.max(ILIDO,10),1);
     $('lum2').style.background='rgba(99,102,241,'+(0.04+li1*0.12).toFixed(3)+')';
     $('f2_lido').textContent=d.bio_lido;
     $('f2_megx').textContent=(d.bio_megx_cv1||0).toFixed(1);
     $('f2_gx').textContent=(d.bio_gx_cv1||0).toFixed(1);
 
-    // Fiber 2 ECS
+    // Disc 2 ECS
     $('ecs2').style.background='rgba(99,102,241,'+(0.04+(1-li1)*0.08).toFixed(3)+')';
     $('f2_lido_cv2').textContent=(d.bio_lido_cv2||0).toFixed(1);
     $('f2_megx_cv2').textContent=(d.bio_megx_cv2||0).toFixed(1);

@@ -92,24 +92,24 @@ PUMP_STATES = {
 
 PUMP_INPUTS = {
     # From separator
-    'Q_plasma_nominal': 30,         # mL/min target flow
+    'Q_plasma_nominal': 75,         # mL/min target flow (per unit)
     'P_plasma_nominal': 50,         # mmHg inlet pressure
     'T_plasma_nominal': 37.0,       # °C
 
     # Operator setpoints
-    'Q_target': 30,                 # mL/min desired flow
+    'Q_target': 75,                 # mL/min desired flow (per unit)
     'P_max_setpoint': 120,          # mmHg max pressure
     'P_min_setpoint': 40,           # mmHg min pressure
 }
 
 PUMP_THRESHOLDS = {
-    # Flow limits
-    'Q_target': 30,                 # mL/min - target flow rate
-    'Q_tolerance': 5,               # mL/min - acceptable deviation
-    'Q_warning_low': 25,            # mL/min - low flow warning
-    'Q_critical_low': 20,           # mL/min - below this = alarm
-    'Q_warning_high': 35,           # mL/min - high flow warning
-    'Q_critical_high': 40,          # mL/min - above this = alarm
+    # Flow limits (per unit, flat-disc design)
+    'Q_target': 75,                 # mL/min - target flow rate per unit
+    'Q_tolerance': 10,              # mL/min - acceptable deviation
+    'Q_warning_low': 60,            # mL/min - low flow warning
+    'Q_critical_low': 50,           # mL/min - below this = alarm
+    'Q_warning_high': 90,           # mL/min - high flow warning
+    'Q_critical_high': 100,         # mL/min - above this = alarm
 
     # Pressure limits
     'P_normal_min': 40,             # mmHg - minimum normal pressure
@@ -133,7 +133,7 @@ PUMP_THRESHOLDS = {
 }
 
 PUMP_OUTPUTS = {
-    'Q_controlled': 30,             # mL/min - actual controlled flow
+    'Q_controlled': 75,             # mL/min - actual controlled flow (per unit)
     'P_out': 50,                    # mmHg - outlet pressure
     'pump_running': False,          # Boolean - pump status
 }
@@ -155,9 +155,9 @@ MIXER_STATES = {
 
 MIXER_INPUTS = {
     # From bioreactor (treated plasma)
-    'Q_plasma_nominal': 30,         # mL/min
-    'Q_plasma_min': 20,
-    'Q_plasma_max': 50,
+    'Q_plasma_nominal': 75,         # mL/min (per unit)
+    'Q_plasma_min': 40,
+    'Q_plasma_max': 120,
     'P_plasma_nominal': 80,         # mmHg
 
     # From separator (cellular stream)
@@ -297,7 +297,7 @@ BIOREACTOR_STATES = {
 
 BIOREACTOR_INPUTS = {
     # From pump (when implemented) or separator
-    'Q_plasma_nominal': 30,         # mL/min
+    'Q_plasma_nominal': 75,         # mL/min (per unit)
     'P_plasma_nominal': 80,         # mmHg
     'T_plasma_nominal': 37.0,       # °C
 
@@ -306,10 +306,10 @@ BIOREACTOR_INPUTS = {
     'C_lido_in_nominal': 21,        # µmol/L
     'C_urea_in_nominal': 5.0,       # mmol/L
 
-    # Reactor design parameters
-    'membrane_area': 1000,          # cm² (design parameter)
-    'reactor_volume': 200,          # mL
-    'cell_count': 5e8,              # cells (5 × 10⁸)
+    # Reactor design parameters (flat-disc cylindrical cartridge, per unit)
+    'membrane_area': 314,           # cm² — flat disc (π × 10²)
+    'reactor_volume': 7140,         # mL (CV1 + CV2 = 3570 + 3570)
+    'cell_count': 3.6e9,            # cells (3.6 × 10⁹ per unit)
 }
 
 BIOREACTOR_THRESHOLDS = {
@@ -372,27 +372,24 @@ SAMPLER_THRESHOLDS = {
 
 # ============= BIOREACTOR: TWO-COMPARTMENT MASS BALANCE PARAMETERS =============
 
-# Control Volume Sizes
+# Control Volume Sizes (flat-disc cylindrical cartridge, 35×20 cm, per unit)
 BIOREACTOR_VOLUMES = {
-    'V_CV1': 100.0,              # mL - Plasma compartment volume
-    'V_CV2': 100.0,              # mL - Hepatocyte compartment volume
+    'V_CV1': 3570.0,             # mL - Plasma compartment volume (per unit)
+    'V_CV2': 3570.0,             # mL - Hepatocyte compartment volume (per unit)
 }
 
 # Membrane Transport Parameters (from BAL_Mass_Balance_Full.docx Section 2.3)
 MEMBRANE_TRANSPORT = {
-    # Membrane area
-    'A_m': 10000.0,  # cm² - Physical area from team calc (Eq 31)
-                             # NOTE: P_m scaled down 10× to keep KoA constant
-                             # This maintains current performance while documenting
-                             # the correct physical membrane area for hardware design
-    
+    # Membrane area — flat polysulfone disc (π × 10² cm²) per unit
+    'A_m': 314.0,    # cm² - Flat disc membrane area per unit
+
     # Permeability coefficients (cm/min)
-    # From literature: K0 values for polysulfone membrane
-    'P_m_NH3': 0.006,  # cm/min - Scaled for 10× larger A_m (keeps KoA=60) (>0.001 cm/min * 60)
-    'P_m_urea': 0.006,  # cm/min - Scaled for 10× larger A_m (~0.001 cm/min * 60)
-    'P_m_lido': 0.0042,  # cm/min - Scaled for 10× larger A_m (0.0007 cm/min * 60)
-    'P_m_MEGX': 0.0048,  # cm/min - Scaled for 10× larger A_m (0.0008 cm/min * 60)
-    'P_m_GX': 0.0044,    # cm/min - GX (MW ~179) slightly less permeable than MEGX (MW ~207)
+    # True literature values for polysulfone membrane (no scaling tricks)
+    'P_m_NH3': 0.006,   # cm/min
+    'P_m_urea': 0.006,  # cm/min
+    'P_m_lido': 0.003,  # cm/min — updated from final design document
+    'P_m_MEGX': 0.0048, # cm/min
+    'P_m_GX': 0.0044,   # cm/min
 }
 
 # Hepatocyte Reaction Kinetics (from Section 3.5)

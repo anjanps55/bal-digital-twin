@@ -145,23 +145,23 @@ def inject_css():
 PRESETS = {
     "Standard Adult": {
         "NH3": 90.0, "lido": 21.0, "urea": 5.0,
-        "Q_blood": 150.0, "Hct": 0.32, "Q_target": 30.0, "duration": 60,
+        "Q_blood": 150.0, "Hct": 0.32, "Q_target": 75.0, "duration": 60,
     },
     "Severe Case": {
         "NH3": 200.0, "lido": 35.0, "urea": 3.0,
-        "Q_blood": 150.0, "Hct": 0.30, "Q_target": 40.0, "duration": 120,
+        "Q_blood": 150.0, "Hct": 0.30, "Q_target": 90.0, "duration": 120,
     },
     "Pediatric Patient": {
         "NH3": 110.0, "lido": 25.0, "urea": 4.0,
-        "Q_blood": 75.0, "Hct": 0.35, "Q_target": 20.0, "duration": 90,
+        "Q_blood": 75.0, "Hct": 0.35, "Q_target": 50.0, "duration": 90,
     },
     "Mild Case": {
         "NH3": 60.0, "lido": 15.0, "urea": 6.0,
-        "Q_blood": 150.0, "Hct": 0.34, "Q_target": 25.0, "duration": 45,
+        "Q_blood": 150.0, "Hct": 0.34, "Q_target": 60.0, "duration": 45,
     },
     "Custom": {
         "NH3": 90.0, "lido": 21.0, "urea": 5.0,
-        "Q_blood": 150.0, "Hct": 0.32, "Q_target": 30.0, "duration": 60,
+        "Q_blood": 150.0, "Hct": 0.32, "Q_target": 75.0, "duration": 60,
     },
 }
 
@@ -175,8 +175,8 @@ _PATIENT_DEFAULTS = {
 }
 
 _BIO_DEFAULTS = {
-    "V_CV1": 100.0, "V_CV2": 100.0, "A_m": 10000.0,
-    "P_m_NH3": 0.006, "P_m_urea": 0.006, "P_m_lido": 0.0042,
+    "V_CV1": 3570.0, "V_CV2": 3570.0, "A_m": 314.0,
+    "P_m_NH3": 0.006, "P_m_urea": 0.006, "P_m_lido": 0.003,
     "P_m_MEGX": 0.0048, "P_m_GX": 0.0044,
     "k1_NH3": 1.0, "k1_lido": 0.85, "k2_MEGX": 0.50, "k_decay": 0.0001,
 }
@@ -282,15 +282,15 @@ def _bioreactor_dialog():
     st.markdown("#### Reactor Geometry")
     gc1, gc2, gc3 = st.columns(3)
     with gc1:
-        v1 = st.number_input("CV1 \u2014 Plasma (mL)", 10.0, 500.0,
-                              value=st.session_state["_bio_V_CV1"], step=10.0)
+        v1 = st.number_input("CV1 \u2014 Plasma (mL)", 10.0, 10000.0,
+                              value=st.session_state["_bio_V_CV1"], step=100.0)
     with gc2:
-        v2 = st.number_input("CV2 \u2014 Hepatocyte (mL)", 10.0, 500.0,
-                              value=st.session_state["_bio_V_CV2"], step=10.0)
+        v2 = st.number_input("CV2 \u2014 Hepatocyte (mL)", 10.0, 10000.0,
+                              value=st.session_state["_bio_V_CV2"], step=100.0)
     with gc3:
-        am = st.number_input("Membrane Area (cm\u00b2)", 100.0, 50000.0,
-                              value=st.session_state["_bio_A_m"], step=500.0,
-                              help="Polysulfone flat-disc membrane surface area")
+        am = st.number_input("Membrane Area (cm\u00b2)", 10.0, 50000.0,
+                              value=st.session_state["_bio_A_m"], step=50.0,
+                              help="Polysulfone flat-disc membrane surface area (314 cm\u00b2 per unit)")
 
     # --- Membrane permeabilities ---
     st.markdown("#### Membrane Permeability")
@@ -545,11 +545,11 @@ def render_sidebar():
         # ---- Treatment settings (always visible — just 2 sliders) ----
         st.markdown(f"**Treatment Settings**")
         # init from preset if needed
-        for k, v in [("Q_target", 30.0), ("duration", 60)]:
+        for k, v in [("Q_target", 75.0), ("duration", 60)]:
             if f"_s_{k}" not in st.session_state:
                 st.session_state[f"_s_{k}"] = v
 
-        q_target = st.slider("Plasma Flow Target (mL/min)", 10.0, 100.0,
+        q_target = st.slider("Plasma Flow Target (mL/min)", 10.0, 150.0,
                               key="_s_Q_target", step=5.0)
         duration = st.slider("Duration (min)", 10, 360,
                               key="_s_duration", step=5)
@@ -1638,7 +1638,7 @@ def render_summary(r):
             st.markdown("**Adaptive Controller Adjustments**")
             adj = r["adjustments"]
             items = [f"- Severity: **{r['severity'].upper()}**",
-                     f"- Flow rate: 30 \u2192 **{adj['Q_plasma']} mL/min**",
+                     f"- Flow rate: 75 \u2192 **{adj['Q_plasma']} mL/min**",
                      f"- Duration: {r['params']['duration']} \u2192 **{r['duration']} min**"]
             if adj.get("fresh_cartridge"):
                 items.append(f"- Fresh hepatocyte cartridge installed (k\u2081 \u00d7{adj['k1_multiplier']:.1f})")

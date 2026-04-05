@@ -68,30 +68,30 @@ class AdaptiveBALController:
         """
         
         adjustments = {
-            'Q_plasma': 30,  # Default
+            'Q_plasma': 75,  # Default (per unit, flat-disc design)
             'duration': 60,   # Default
             'temperature_boost': 0,  # Default: 37°C (no boost)
             'fresh_cartridge': False,  # Default: use existing
             'k1_multiplier': 1.0,  # Represents fresh vs aged hepatocytes
             'severity': severity
         }
-        
+
         if severity == 'mild':
             # Mild case: standard treatment, maybe extend slightly
             adjustments['duration'] = 90
-            adjustments['Q_plasma'] = 30
-            
+            adjustments['Q_plasma'] = 75
+
         elif severity == 'severe':
             # Severe case: increase flow OR use fresh cartridge
             adjustments['duration'] = 120
-            adjustments['Q_plasma'] = 40  # Increase flow 33%
+            adjustments['Q_plasma'] = 90  # Increase flow 20%
             adjustments['fresh_cartridge'] = True  # Use fresh hepatocytes
             adjustments['k1_multiplier'] = 1.5  # Fresh cells are more active
-            
+
         elif severity == 'critical':
             # Critical case: all adjustments
             adjustments['duration'] = 180
-            adjustments['Q_plasma'] = 50  # Increase flow 67%
+            adjustments['Q_plasma'] = 110  # Increase flow ~47%
             adjustments['temperature_boost'] = 0.5  # Slight temp increase (37→37.5°C)
             adjustments['fresh_cartridge'] = True
             adjustments['k1_multiplier'] = 2.0  # Fresh + optimized

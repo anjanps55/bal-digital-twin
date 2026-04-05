@@ -126,7 +126,7 @@ class BioreactorSystem(BaseModule):
     
     def _update_inputs(self, **inputs):
         """Update input parameters."""
-        self.Q_plasma = inputs.get('Q_plasma', 30.0)
+        self.Q_plasma = inputs.get('Q_plasma', 75.0)
         self.P_plasma = inputs.get('P_plasma', 50.0)
         self.T_plasma = inputs.get('T_plasma', 37.0)
         self.C_NH3_in = inputs.get('C_NH3', BIOREACTOR_INPUTS['C_NH3_in_nominal'])
