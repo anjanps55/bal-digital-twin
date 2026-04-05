@@ -176,8 +176,8 @@ _PATIENT_DEFAULTS = {
 
 _BIO_DEFAULTS = {
     "V_CV1": 3570.0, "V_CV2": 3570.0, "A_m": 314.0,
-    "P_m_NH3": 0.006, "P_m_urea": 0.006, "P_m_lido": 0.003,
-    "P_m_MEGX": 0.0048, "P_m_GX": 0.0044,
+    "P_m_NH3": 0.12, "P_m_urea": 0.12, "P_m_lido": 0.10,
+    "P_m_MEGX": 0.09, "P_m_GX": 0.085,
     "k1_NH3": 1.0, "k1_lido": 0.85, "k2_MEGX": 0.50, "k_decay": 0.0001,
 }
 
@@ -296,26 +296,26 @@ def _bioreactor_dialog():
     st.markdown("#### Membrane Permeability")
     mc1, mc2, mc3 = st.columns(3)
     with mc1:
-        pm_nh3 = st.number_input("P_m NH\u2083", 0.0001, 0.1,
+        pm_nh3 = st.number_input("P_m NH\u2083", 0.001, 0.5,
                                   value=st.session_state["_bio_P_m_NH3"],
-                                  step=0.001, format="%.4f")
+                                  step=0.01, format="%.3f")
     with mc2:
-        pm_urea = st.number_input("P_m Urea", 0.0001, 0.1,
+        pm_urea = st.number_input("P_m Urea", 0.001, 0.5,
                                    value=st.session_state["_bio_P_m_urea"],
-                                   step=0.001, format="%.4f")
+                                   step=0.01, format="%.3f")
     with mc3:
-        pm_lido = st.number_input("P_m Lido", 0.0001, 0.1,
+        pm_lido = st.number_input("P_m Lido", 0.001, 0.5,
                                    value=st.session_state["_bio_P_m_lido"],
-                                   step=0.001, format="%.4f")
+                                   step=0.01, format="%.3f")
     mc4, mc5, _ = st.columns(3)
     with mc4:
-        pm_megx = st.number_input("P_m MEGX", 0.0001, 0.1,
+        pm_megx = st.number_input("P_m MEGX", 0.001, 0.5,
                                    value=st.session_state["_bio_P_m_MEGX"],
-                                   step=0.001, format="%.4f")
+                                   step=0.01, format="%.3f")
     with mc5:
-        pm_gx = st.number_input("P_m GX", 0.0001, 0.1,
+        pm_gx = st.number_input("P_m GX", 0.001, 0.5,
                                  value=st.session_state["_bio_P_m_GX"],
-                                 step=0.001, format="%.4f")
+                                 step=0.01, format="%.3f")
     st.caption("All permeabilities in cm/min.  Flux = P_m \u00d7 A_m \u00d7 \u0394C")
 
     # --- Kinetics ---
@@ -1405,11 +1405,11 @@ _FINAL_DOC_GEOMETRY = {
     "V_CV1": 3570.0,       # mL — plasma compartment (one unit)
     "V_CV2": 3570.0,       # mL — hepatocyte compartment
     "A_m": 314.0,          # cm² — flat disc (π × 10²)
-    "P_m_NH3": 0.006,      # cm/min — same
-    "P_m_urea": 0.006,     # cm/min — same
-    "P_m_lido": 0.003,     # cm/min — updated from document
-    "P_m_MEGX": 0.0048,    # cm/min — kept
-    "P_m_GX": 0.0044,      # cm/min — kept
+    "P_m_NH3": 0.12,       # cm/min — effective P_m for flat-disc (KoA ≈ 37.7)
+    "P_m_urea": 0.12,      # cm/min
+    "P_m_lido": 0.10,      # cm/min — (KoA ≈ 31.4)
+    "P_m_MEGX": 0.09,      # cm/min
+    "P_m_GX": 0.085,       # cm/min
     "k1_NH3": 1.0,         # /min — same
     "k1_lido": 0.85,       # /min — same
     "k_decay": 0.0001,     # /min — same
