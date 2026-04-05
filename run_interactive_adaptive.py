@@ -81,7 +81,7 @@ def calculate_adjustments(severity, nh3):
     """Calculate treatment parameters based on severity"""
     
     adjustments = {
-        'Q_plasma': 30,
+        'Q_plasma': 75,
         'duration': 60,
         'fresh_cartridge': False,
         'k1_multiplier': 1.0,

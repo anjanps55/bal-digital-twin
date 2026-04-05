@@ -1916,6 +1916,12 @@ def main():
                 <p style="color:{GRAY};margin:4px 0 0;font-size:1.05rem;">
                     Treatment Simulation & Monitoring Dashboard
                 </p>
+                <span style="display:inline-block;margin-top:6px;padding:3px 12px;
+                    background:linear-gradient(135deg,#e0f2fe,#dbeafe);color:#1e40af;
+                    border:1px solid #93c5fd;border-radius:12px;font-size:0.75rem;
+                    font-weight:600;letter-spacing:0.3px;">
+                    Flat-Disc Membrane Design &mdash; 4-Unit (2\u00d72 Series-Parallel) Configuration
+                </span>
             </div>
             """,
             unsafe_allow_html=True,

@@ -68,7 +68,7 @@ Capstone Project/
 
 The adaptive controller (`adaptive_controller.py`) automatically optimizes:
 
-1. **Flow Rate** - Adjusts pump speed (30-50 mL/min)
+1. **Flow Rate** - Adjusts pump speed (75-110 mL/min per unit)
 2. **Treatment Duration** - Extends as needed (60-240 min)
 3. **Hepatocyte Cartridge** - Fresh vs aged (1.0-3.0× capacity)
 4. **Temperature** - Enzyme optimization (37.0-37.5°C)
@@ -101,7 +101,7 @@ The adaptive controller (`adaptive_controller.py`) automatically optimizes:
 
 ### Module 1: Plasma Separator
 - Separates plasma from cellular components
-- Flow: ~100 mL/min plasma output
+- Flow: 75 mL/min plasma per unit (flat-disc design)
 - Hematocrit monitoring
 
 ### Module 2: Pump & Control
@@ -109,11 +109,13 @@ The adaptive controller (`adaptive_controller.py`) automatically optimizes:
 - Safety interlocks
 - Pressure monitoring
 
-### Module 3: Bioreactor
+### Module 3: Bioreactor (Flat-Disc Membrane Design)
 - Two-compartment model (CV1: plasma, CV2: hepatocytes)
-- 8 coupled ODEs for mass balance
-- Metabolic reactions: NH3 → Urea, Lidocaine → MEGX
-- Membrane area: 10,000 cm²
+- 10 coupled ODEs for mass balance (NH₃, Urea, Lido, MEGX, GX)
+- Metabolic reactions: NH₃ → Urea (urea cycle), Lido → MEGX → GX (CYP450)
+- Flat polysulfone disc membrane: 314 cm² per unit
+- Cylindrical cartridge: 35×20 cm, 3,570 mL per compartment
+- Configuration: 4 units (2× parallel × 2 stages in series)
 
 ### Module 4: Sampler
 - Real-time concentration monitoring
@@ -160,13 +162,13 @@ pytest tests/ -v
 
 System parameters in `config/constants.py`:
 
-### Key Parameters
-- **Membrane Area**: 10,000 cm² (from team calculations)
-- **Plasma Flow**: 30 mL/min (simulation), 150 mL/min (design)
-- **k1_NH3**: 1.0 /min (calibrated), 3-5 /min (calculated)
-- **Compartment Volumes**: 100 mL each
-
-See documentation for parameter alignment between simulation and physical design.
+### Key Parameters (Flat-Disc Cylindrical Cartridge)
+- **Membrane Area**: 314 cm² per unit (flat polysulfone disc, π × 10²)
+- **Compartment Volumes**: 3,570 mL each (CV1 plasma + CV2 hepatocyte)
+- **Plasma Flow**: 75 mL/min per unit
+- **Cell Count**: 3.6 × 10⁹ hepatocytes per unit
+- **k1_NH3**: 1.0 /min (calibrated)
+- **Configuration**: 4 units — 2× parallel × 2 stages in series (150 mL/min total)
 
 ---
 
