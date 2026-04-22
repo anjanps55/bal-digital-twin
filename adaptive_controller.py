@@ -82,23 +82,25 @@ class AdaptiveBALController:
             adjustments['Q_plasma'] = 75
 
         elif severity == 'severe':
-            # Severe case: increase flow OR use fresh cartridge
-            adjustments['duration'] = 120
+            # Severe case: increase flow AND extend duration + fresh cartridge
+            adjustments['duration'] = 240
             adjustments['Q_plasma'] = 90  # Increase flow 20%
             adjustments['fresh_cartridge'] = True  # Use fresh hepatocytes
             adjustments['k1_multiplier'] = 1.5  # Fresh cells are more active
 
         elif severity == 'critical':
-            # Critical case: all adjustments
-            adjustments['duration'] = 180
+            # Critical case: all adjustments, max duration
+            adjustments['duration'] = 480
             adjustments['Q_plasma'] = 110  # Increase flow ~47%
             adjustments['temperature_boost'] = 0.5  # Slight temp increase (37→37.5°C)
             adjustments['fresh_cartridge'] = True
             adjustments['k1_multiplier'] = 2.0  # Fresh + optimized
-        
-        # Fine-tune based on specific levels
+
+        # Fine-tune based on specific levels — only extend, never shorten
         if nh3_level > 200:
-            adjustments['duration'] = max(adjustments['duration'], 240)
+            adjustments['duration'] = max(adjustments['duration'], 480)
+        if nh3_level > 350:
+            adjustments['duration'] = max(adjustments['duration'], 720)
         
         return adjustments
     

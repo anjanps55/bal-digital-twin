@@ -551,7 +551,7 @@ def render_sidebar():
 
         q_target = st.slider("Plasma Flow Target (mL/min)", 10.0, 150.0,
                               key="_s_Q_target", step=5.0)
-        duration = st.slider("Duration (min)", 10, 360,
+        duration = st.slider("Duration (min)", 10, 720,
                               key="_s_duration", step=5)
 
         st.markdown("---")
