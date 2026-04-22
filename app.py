@@ -1997,7 +1997,17 @@ def main():
                 <p style="color:{GRAY};margin:4px 0 0;font-size:1.05rem;">
                     Treatment Simulation & Monitoring Dashboard
                 </p>
-                <span style="display:inline-block;margin-top:6px;padding:3px 12px;
+                <div style="margin-top:10px;font-size:0.82rem;color:{GRAY};line-height:1.55;">
+                    <div>
+                        <span style="color:{NAVY};font-weight:600;">Team:</span>
+                        Namit Gandavadi &middot; Sabrina Yurconic &middot; Anna Bourne &middot; Ivy Lin &middot; Grace Treon
+                    </div>
+                    <div style="margin-top:2px;">
+                        <span style="color:{NAVY};font-weight:600;">Advisor/Client:</span> Dr. James Kastner
+                        &nbsp;&nbsp;<span style="color:{NAVY};font-weight:600;">Mentor:</span> Dr. Anjan Panneer Selvam
+                    </div>
+                </div>
+                <span style="display:inline-block;margin-top:10px;padding:3px 12px;
                     background:linear-gradient(135deg,#e0f2fe,#dbeafe);color:#1e40af;
                     border:1px solid #93c5fd;border-radius:12px;font-size:0.75rem;
                     font-weight:600;letter-spacing:0.3px;">
